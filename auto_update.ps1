@@ -1,58 +1,57 @@
-$ErrorActionPreference = 'SilentlyContinue'
+﻿$ErrorActionPreference = 'SilentlyContinue'
 $currentVersion = Get-Content -Path "version.txt" -Raw | ForEach-Object { $_ -replace "
-|
-", "" }
+|", "" }
 
-# --- �I?N TH�NG TIN GITHUB C?A B?N V�O ��Y ---
+# --- ĐIỀN THÔNG TIN GITHUB CỦA BẠN VÀO ĐÂY ---
 $githubUser = "NhimS2"
 $githubRepo = "Bot-topup"
-$branch = "main"
+$branch = "master"
 # ---------------------------------------------
 
 $rawUrl = "https://raw.githubusercontent.com/$githubUser/$githubRepo/$branch/version.txt"
 $zipUrl = "https://github.com/$githubUser/$githubRepo/archive/refs/heads/$branch.zip"
 
-Write-Host "�ang ki?m tra c?p nh?t t? GitHub..." -ForegroundColor Cyan
+Write-Host "Đang kiểm tra cập nhật từ GitHub..." -ForegroundColor Cyan
 
 $latestVersion = Invoke-RestMethod -Uri $rawUrl -UseBasicParsing -TimeoutSec 5
 if ($null -eq $latestVersion) {
-    Write-Host "Kh�ng th? ki?m tra b?n c?p nh?t. V?n ti?p t?c ch?y Bot." -ForegroundColor Yellow
+    Write-Host "Không thể kiểm tra bản cập nhật. Vẫn tiếp tục chạy Bot." -ForegroundColor Yellow
     exit 0
 }
 
 $latestVersion = $latestVersion.Trim()
 
 if ($currentVersion -eq $latestVersion) {
-    Write-Host "Phi�n b?n $currentVersion l� m?i nh?t!" -ForegroundColor Green
+    Write-Host "Phiên bản $currentVersion là mới nhất!" -ForegroundColor Green
     exit 0
 }
 
 Write-Host "
-[!Ph�t hi?n phi�n b?n m?i: $latestVersion (Hi?n t?i: $currentVersion)!" -ForegroundColor Magenta
-Write-Host "�ang t? d?ng t?i v? v� c?p nh?t... Vui l�ng d?i." -ForegroundColor Yellow
+[!] Phát hiện phiên bản mới: $latestVersion (Hiện tại: $currentVersion)!" -ForegroundColor Magenta
+Write-Host "Đang tự động tải về và cập nhật... Vui lòng đợi." -ForegroundColor Yellow
 
-# T?i file zip
+# Tải file zip
 Invoke-WebRequest -Uri $zipUrl -OutFile "update.zip" -UseBasicParsing
 
-# Gi?i n�n
+# Giải nén
 if (Test-Path "update_temp") { Remove-Item "update_temp" -Recurse -Force }
 Expand-Archive -Path "update.zip" -DestinationPath "update_temp" -Force
 
-# L?y thu m?c g?c b�n trong file zip (thu?ng c� d?ng repo-main)
+# Lấy thư mục gốc bên trong file zip (thường có dạng repo-master)
 $extractedFolder = Get-ChildItem -Path "update_temp" | Where-Object { $_.PSIsContainer } | Select-Object -First 1
 
 if ($extractedFolder) {
-    # Copy to�n b? d� l�n thu m?c hi?n t?i
+    # Copy toàn bộ đè lên thư mục hiện tại
     Copy-Item -Path "$($extractedFolder.FullName)\*" -Destination "." -Recurse -Force
     Write-Host "
-[OK] C?p nh?t m� ngu?n th�nh c�ng!" -ForegroundColor Green
-    Write-Host "Vui l�ng v�o chrome://extensions t?i l?i (Refresh) ti?n �ch." -ForegroundColor Yellow
-    Write-Host "�ang kh?i d?ng l?i Bot..." -ForegroundColor Cyan
+[OK] Cập nhật mã nguồn thành công!" -ForegroundColor Green
+    Write-Host "Vui lòng vào chrome://extensions tải lại (Refresh) tiện ích." -ForegroundColor Yellow
+    Write-Host "Đang khởi động lại Bot..." -ForegroundColor Cyan
 }
 
-# D?n d?p r�c
+# Dọn dẹp rác
 Remove-Item "update.zip" -Force
 Remove-Item "update_temp" -Recurse -Force
 
-# Tr? v? 1 d? b�o cho file bat bi?t l� c� update, c?n ch?y l?i
+# Trả về 1 để báo cho file bat biết là có update, cần chạy lại
 exit 1

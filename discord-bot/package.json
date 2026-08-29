@@ -1,0 +1,13 @@
+{
+  "name": "tplus-discord-controller",
+  "version": "1.0.0",
+  "description": "Discord Bot điều khiển từ xa Chrome Extension TPlus",
+  "main": "bot.js",
+  "scripts": {
+    "start": "node bot.js"
+  },
+  "dependencies": {
+    "discord.js": "^14.14.1",
+    "dotenv": "^16.4.5"
+  }
+}

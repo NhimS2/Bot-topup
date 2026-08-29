@@ -24,39 +24,57 @@ cd discord-bot
 
 :CheckPython
 set "PYTHON_EXE="
-where py >nul 2>nul && set "PYTHON_EXE=py"
-if not defined PYTHON_EXE (
-    where python >nul 2>nul && set "PYTHON_EXE=python"
+
+:: 1. Kiem tra thu muc cai dat thong dung
+for /d %%i in ("%LOCALAPPDATA%\Programs\Python\Python3*") do (
+    if exist "%%i\python.exe" (
+        set "PYTHON_EXE=%%i\python.exe"
+    )
 )
 
-:: Kiem tra xem Python co the chay code co ban khong (de loai tru phien ban cua Microsoft Store)
-if defined PYTHON_EXE (
-    "%PYTHON_EXE%" -c "print('OK')" >nul 2>&1
-    if %errorlevel% neq 0 set "PYTHON_EXE="
-)
-
-:: Neu chua co python trong PATH hoac khong chay duoc, kiem tra cac duong dan cai dat pho bien
 if not defined PYTHON_EXE (
-    for /d %%i in ("%LOCALAPPDATA%\Programs\Python\Python3*") do (
+    for /d %%i in ("%LOCALAPPDATA%\Python\pythoncore-*") do (
         if exist "%%i\python.exe" (
             set "PYTHON_EXE=%%i\python.exe"
         )
     )
 )
 
-:: Neu van khong co, bat dau tai va cai dat tu dong
+:: 2. Kiem tra py launcher
+if not defined PYTHON_EXE (
+    py -c "print('OK')" >nul 2>&1
+    if %errorlevel% equ 0 set "PYTHON_EXE=py"
+)
+
+:: 3. Kiem tra python trong PATH
+if not defined PYTHON_EXE (
+    python -c "print('OK')" >nul 2>&1
+    if %errorlevel% equ 0 set "PYTHON_EXE=python"
+)
+
+:: 4. Kiem tra C:\Python* hoac Program Files
+if not defined PYTHON_EXE (
+    for /d %%i in ("C:\Python3*", "%ProgramFiles%\Python3*") do (
+        if exist "%%i\python.exe" (
+            set "PYTHON_EXE=%%i\python.exe"
+        )
+    )
+)
+
+:: 5. Neu van khong co, bat dau tai va cai dat tu dong vao thu muc TEMP
 if not defined PYTHON_EXE (
     echo [!] Khong tim thay Python hop le tren may tinh.
     echo [!] Dang tu dong tai va cai dat Python 3.11... (Vui long doi vai phut)
-    curl -k -o python-installer.exe https://www.python.org/ftp/python/3.11.8/python-3.11.8-amd64.exe
+    set "INSTALLER_PATH=%TEMP%\python-installer.exe"
+    curl -L -k -o "%INSTALLER_PATH%" https://www.python.org/ftp/python/3.11.8/python-3.11.8-amd64.exe
     if %errorlevel% neq 0 (
-        echo [LOI] Khong the tai xuong Python. Vui long cai dat thu cong tu trang chu.
+        echo [LOI] Khong the tai xuong Python tu dong. Vui long cai dat thu cong tai: https://www.python.org/downloads/
         pause
         exit /b 1
     )
     echo [!] Dang tien hanh cai dat Python... (Vui long cap quyen neu co bang hoi hien len)
-    start /wait python-installer.exe /quiet InstallAllUsers=0 PrependPath=1 Include_test=0 Include_doc=0 Include_tcltk=0 Include_pip=1
-    del python-installer.exe
+    start /wait "" "%INSTALLER_PATH%" /quiet InstallAllUsers=0 PrependPath=1 Include_test=0 Include_doc=0 Include_tcltk=0 Include_pip=1
+    del /f /q "%INSTALLER_PATH%" >nul 2>&1
     
     :: Tim lai duong dan sau khi cai
     for /d %%i in ("%LOCALAPPDATA%\Programs\Python\Python3*") do (
@@ -67,7 +85,7 @@ if not defined PYTHON_EXE (
     
     if not defined PYTHON_EXE (
         echo [LOI] Cai dat Python xong nhung chua tim thay file chay.
-        echo Vui long tat bang nay, roi bat lai start.bat de ap dung cai dat.
+        echo Vui long tat bang nay, roi bat lai start_python.bat de ap dung cai dat.
         pause
         exit /b 1
     )

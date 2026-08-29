@@ -1,0 +1,172 @@
+<!DOCTYPE html>
+<html lang="vi">
+
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>TPlus Topup Auto-Checker</title>
+  <link rel="stylesheet" href="popup.css">
+</head>
+
+<body>
+  <div class="container">
+    <!-- Header -->
+    <div class="header">
+      <div class="logo-title">
+        <div class="logo-badge">TP</div>
+        <div>
+          <h1>TPlus Auto-Checker</h1>
+          <p class="subtitle">Tự động hóa Topup Đa Dự Án</p>
+        </div>
+      </div>
+      <div class="toggle-wrapper">
+        <label class="toggle-switch" title="Bật/Tắt tự động hóa">
+          <input type="checkbox" id="toggle-enabled">
+          <span class="slider"></span>
+        </label>
+      </div>
+    </div>
+
+    <!-- Status & Countdown Card -->
+    <div class="card status-card">
+      <div class="status-header">
+        <span class="status-indicator" id="status-indicator"></span>
+        <span id="status-text">Đang kiểm tra...</span>
+      </div>
+      <div class="countdown-wrapper">
+        <div class="countdown-label">LẦN CHẠY TIẾP THEO SAU:</div>
+        <div class="countdown-timer" id="countdown-timer">--:--</div>
+      </div>
+      <div style="display: flex; gap: 8px;">
+        <button class="btn btn-primary" id="btn-run-now" style="flex: 1;">
+          <span class="btn-icon">⚡</span> Chạy toàn bộ vòng lặp ngay
+        </button>
+        <button class="btn btn-danger" id="btn-stop-now" style="display: none; padding: 0 16px;">
+          ⏹ Dừng
+        </button>
+      </div>
+      <div class="workflow-hint">
+        🔄 <strong>Quy trình tự động:</strong> Đăng nhập ➔ Beer SG (Chỉnh ngày ➔ Proc & Fail) ➔ Beer 333 (Chỉnh ngày ➔
+        Proc & Fail) ➔ Về Home.
+      </div>
+    </div>
+
+    <!-- Discord Bot Status & Reminder Card -->
+    <div class="card bot-status-card" id="bot-status-card">
+      <div class="bot-status-row">
+        <div class="bot-status-left">
+          <span class="bot-status-dot" id="bot-status-dot"></span>
+          <span class="bot-status-title">Discord Controller:</span>
+        </div>
+        <span class="bot-status-badge" id="bot-status-badge">Đang kiểm tra...</span>
+      </div>
+      <div class="bot-reminder-msg" id="bot-reminder-msg" style="display: none;">
+        ⚠️ <strong>Bot chưa bật!</strong> Nhấp đúp vào <code>start_hidden.vbs</code> trong thư mục <code>discord-bot</code> để điều khiển từ xa qua Discord.
+      </div>
+    </div>
+
+    <!-- Configuration Settings -->
+    <div class="card config-card">
+      <div class="card-title">
+        <span>⚙️</span> Cấu hình hệ thống
+      </div>
+
+      <div class="form-group">
+        <label for="input-interval">Chu kỳ chạy lặp lại:</label>
+        <div class="input-with-presets">
+          <input type="number" id="input-interval" min="1" max="1440" value="60">
+          <div class="preset-buttons">
+            <button class="btn-preset" data-min="5">5p</button>
+            <button class="btn-preset" data-min="15">15p</button>
+            <button class="btn-preset" data-min="30">30p</button>
+            <button class="btn-preset active" data-min="60">60p</button>
+          </div>
+        </div>
+      </div>
+
+      <div class="form-group">
+        <label for="input-from-date">Ngày bắt đầu lọc (From Date):</label>
+        <input type="date" id="input-from-date" class="form-input" value="2026-08-15">
+      </div>
+
+      <div class="form-group">
+        <label for="input-device-name">Tên máy hiển thị trên Discord:</label>
+        <input type="text" id="input-device-name" class="form-input" placeholder="VD: Máy 1 (Nhật), Máy 2 (Tuấn)..."
+          value="Máy 1 (Nhật)">
+      </div>
+
+      <div class="form-group">
+        <label for="input-email">Email đăng nhập:</label>
+        <input type="email" id="input-email" class="form-input" value="thanhquang.le@t-plus.vn">
+      </div>
+
+      <div class="form-group">
+        <label for="input-password">Mật khẩu:</label>
+        <input type="password" id="input-password" class="form-input" value="@Luom0102">
+      </div>
+
+      <div class="form-group">
+        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:4px;">
+          <label for="input-phone-entry" style="margin-bottom:0;">Danh sách SĐT loại trừ:</label>
+          <span id="blocked-phones-count" style="font-size:11px; color:var(--text-muted); font-weight:600;">(0
+            số)</span>
+        </div>
+        <div style="display:flex; gap:6px;">
+          <input type="text" id="input-phone-entry" class="form-input" placeholder="Dán SĐT và nhấn Enter..."
+            style="font-family: monospace; font-size: 12px;">
+          <button type="button" class="btn btn-primary" id="btn-add-phone"
+            style="width: auto; padding: 0 12px; white-space: nowrap; font-size: 11px;">+ Thêm</button>
+        </div>
+        <div id="blocked-phones-tags" class="blocked-phones-tags">
+          <div class="blocked-phones-empty">Chưa có số nào trong danh sách chặn</div>
+        </div>
+      </div>
+
+      <div class="form-group">
+        <label>Dự án sẽ chạy tự động:</label>
+        <div
+          style="display:flex; flex-direction:column; gap:6px; margin-top:6px; background:#f9f9f9; padding:10px; border-radius:6px; border:1px solid #eee;">
+          <label class="checkbox-container">
+            <input type="checkbox" class="proj-checkbox" value="biasg-2025-rcp5" checked>
+            <span class="check-label">Beer SG 2026 RCP5</span>
+          </label>
+          <label class="checkbox-container">
+            <input type="checkbox" class="proj-checkbox" value="bia333-spring-25" checked>
+            <span class="check-label">Beer 333 Spring 2025</span>
+          </label>
+        </div>
+      </div>
+
+      <div class="form-group form-check">
+        <label class="checkbox-container">
+          <input type="checkbox" id="check-show-widget" checked>
+          <span class="check-label">Hiển thị thanh trạng thái nổi trên web</span>
+        </label>
+      </div>
+
+      <button class="btn btn-secondary" id="btn-save-config">Lưu cấu hình</button>
+    </div>
+
+    <!-- History / Logs -->
+    <div class="card logs-card">
+      <div class="logs-header">
+        <div class="card-title" style="margin-bottom: 0;">
+          <span>📋</span> Lịch sử hoạt động
+        </div>
+        <button class="btn-link" id="btn-clear-logs">Xóa lịch sử</button>
+      </div>
+      <div class="logs-container" id="logs-container">
+        <div class="log-empty">Chưa có lịch sử hoạt động</div>
+      </div>
+    </div>
+
+    <!-- Footer -->
+    <div class="footer">
+      <span>TPlus Auto Topup v2.5 • Chuẩn hóa ngày 2026-08-15</span>
+    </div>
+  </div>
+
+  <script src="popup.js"></script>
+</body>
+
+</html>

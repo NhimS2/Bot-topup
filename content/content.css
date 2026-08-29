@@ -1,0 +1,306 @@
+/**
+ * TPlus Topup Auto-Checker - Content Script CSS
+ * Floating Widget, Live Terminal Log Box, and Control Buttons (Run / Pause / Resume / Stop)
+ */
+
+#tplus-auto-widget {
+  position: fixed !important;
+  bottom: 16px;
+  right: 16px;
+  width: 380px !important;
+  height: auto;
+  min-height: 250px;
+  background: #ffffff !important;
+  border-radius: 12px !important;
+  box-shadow: 0 12px 36px rgba(0, 0, 0, 0.3), 0 0 0 1px rgba(0, 0, 0, 0.1) !important;
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif !important;
+  z-index: 2147483647 !important;
+  color: #1e293b !important;
+  line-height: 1.4 !important;
+  overflow: hidden !important;
+  display: flex;
+  flex-direction: column !important;
+  resize: both !important; /* Allow resizing */
+}
+
+#tplus-auto-widget.tplus-minimized {
+  min-height: 0 !important;
+  height: auto !important;
+  resize: none !important;
+}
+
+.tplus-widget-header {
+  background: linear-gradient(135deg, #0f172a, #1e293b) !important;
+  color: #ffffff !important;
+  padding: 10px 12px !important;
+  display: flex !important;
+  justify-content: space-between !important;
+  align-items: center !important;
+  cursor: grab !important; /* Indicate draggable */
+  flex-shrink: 0 !important;
+}
+
+.tplus-widget-header:active {
+  cursor: grabbing !important;
+}
+
+.tplus-widget-title {
+  display: flex !important;
+  align-items: center !important;
+  gap: 8px !important;
+  font-size: 13px !important;
+  font-weight: 700 !important;
+  pointer-events: none !important; /* Prevent text selection while dragging */
+}
+
+.tplus-status-dot {
+  width: 10px !important;
+  height: 10px !important;
+  border-radius: 50% !important;
+  display: inline-block !important;
+  background: #10b981 !important;
+  box-shadow: 0 0 8px #10b981 !important;
+}
+
+.tplus-status-dot.working {
+  background: #3b82f6 !important;
+  box-shadow: 0 0 8px #3b82f6 !important;
+  animation: tplus-pulse 1.2s infinite !important;
+}
+
+.tplus-status-dot.paused {
+  background: #f59e0b !important;
+  box-shadow: 0 0 8px #f59e0b !important;
+  animation: tplus-pulse 1.8s infinite !important;
+}
+
+.tplus-status-dot.idle {
+  background: #94a3b8 !important;
+  box-shadow: none !important;
+}
+
+.tplus-status-dot.error {
+  background: #ef4444 !important;
+  box-shadow: 0 0 8px #ef4444 !important;
+}
+
+@keyframes tplus-pulse {
+  0% { transform: scale(0.95); opacity: 0.8; }
+  50% { transform: scale(1.2); opacity: 1; }
+  100% { transform: scale(0.95); opacity: 0.8; }
+}
+
+.tplus-widget-actions {
+  display: flex !important;
+  align-items: center !important;
+  gap: 5px !important;
+}
+
+.tplus-btn-run, .tplus-btn-pause, .tplus-btn-stop {
+  border: none !important;
+  padding: 4px 8px !important;
+  border-radius: 6px !important;
+  font-size: 11px !important;
+  font-weight: 700 !important;
+  cursor: pointer !important;
+  transition: all 0.15s ease !important;
+  display: inline-flex !important;
+  align-items: center !important;
+  gap: 3px !important;
+}
+
+.tplus-btn-run {
+  background: #2563eb !important;
+  color: #ffffff !important;
+}
+.tplus-btn-run:hover {
+  background: #1d4ed8 !important;
+}
+
+.tplus-btn-pause {
+  background: #d97706 !important;
+  color: #ffffff !important;
+}
+.tplus-btn-pause:hover {
+  background: #b45309 !important;
+}
+
+.tplus-btn-resume {
+  background: #16a34a !important;
+  color: #ffffff !important;
+}
+.tplus-btn-resume:hover {
+  background: #15803d !important;
+}
+
+.tplus-btn-stop {
+  background: #dc2626 !important;
+  color: #ffffff !important;
+}
+.tplus-btn-stop:hover {
+  background: #b91c1c !important;
+}
+
+.tplus-btn-min, .tplus-btn-close {
+  background: rgba(255, 255, 255, 0.15) !important;
+  color: #ffffff !important;
+  border: none !important;
+  width: 22px !important;
+  height: 22px !important;
+  border-radius: 4px !important;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  font-size: 13px !important;
+  cursor: pointer !important;
+  transition: background 0.15s !important;
+}
+
+.tplus-btn-min:hover, .tplus-btn-close:hover {
+  background: rgba(255, 255, 255, 0.3) !important;
+}
+
+.tplus-widget-body {
+  padding: 10px !important;
+  background: #f8fafc !important;
+  display: flex !important;
+  flex-direction: column !important;
+  gap: 8px !important;
+  flex: 1 !important; /* Grow to fill resized space */
+  min-height: 0 !important; /* Required for scrollbar to work inside flex */
+}
+
+.tplus-widget-body.tplus-hidden {
+  display: none !important;
+}
+
+.tplus-info-row {
+  display: flex !important;
+  justify-content: space-between !important;
+  align-items: center !important;
+  font-size: 12px !important;
+  color: #475569 !important;
+  flex-shrink: 0 !important;
+}
+
+.tplus-bot-pill {
+  font-size: 10px !important;
+  font-weight: 700 !important;
+  padding: 2px 6px !important;
+  border-radius: 10px !important;
+  display: inline-flex !important;
+  align-items: center !important;
+  gap: 3px !important;
+  cursor: default !important;
+}
+
+.tplus-bot-pill.online {
+  background: #dcfce7 !important;
+  color: #15803d !important;
+  border: 1px solid #86efac !important;
+}
+
+.tplus-bot-pill.offline {
+  background: #fee2e2 !important;
+  color: #b91c1c !important;
+  border: 1px solid #fca5a5 !important;
+}
+
+.tplus-step-banner {
+  background: #e0f2fe !important;
+  border: 1px solid #bae6fd !important;
+  border-radius: 6px !important;
+  padding: 6px 8px !important;
+  font-size: 11px !important;
+  font-weight: 600 !important;
+  color: #0369a1 !important;
+  display: flex !important;
+  align-items: center !important;
+  gap: 6px !important;
+  flex-shrink: 0 !important;
+}
+
+.tplus-step-banner.paused {
+  background: #fef3c7 !important;
+  border-color: #fde68a !important;
+  color: #92400e !important;
+}
+
+.tplus-live-terminal-wrapper {
+  background: #0f172a !important;
+  border-radius: 8px !important;
+  padding: 8px !important;
+  border: 1px solid #334155 !important;
+  display: flex !important;
+  flex-direction: column !important;
+  flex: 1 !important; /* Grow wrapper */
+  min-height: 0 !important; /* Enforce flex constraints */
+}
+
+.tplus-terminal-header {
+  font-size: 10px !important;
+  font-weight: 700 !important;
+  color: #94a3b8 !important;
+  text-transform: uppercase !important;
+  letter-spacing: 0.5px !important;
+  margin-bottom: 6px !important;
+  display: flex !important;
+  justify-content: space-between !important;
+  align-items: center !important;
+  flex-shrink: 0 !important;
+}
+
+.tplus-live-logs {
+  overflow-y: auto !important;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace !important;
+  font-size: 11px !important;
+  display: flex !important;
+  flex-direction: column !important;
+  gap: 4px !important;
+  flex: 1 !important; /* Let log area fill available space */
+  min-height: 0 !important; /* Critical for overflow-y: auto to show scrollbar */
+  padding-right: 8px !important; /* Create space for scrollbar */
+}
+
+/* Custom Scrollbar for Terminal */
+.tplus-live-logs::-webkit-scrollbar {
+  width: 6px !important;
+}
+.tplus-live-logs::-webkit-scrollbar-track {
+  background: transparent !important;
+}
+.tplus-live-logs::-webkit-scrollbar-thumb {
+  background: #334155 !important;
+  border-radius: 4px !important;
+}
+.tplus-live-logs::-webkit-scrollbar-thumb:hover {
+  background: #475569 !important;
+}
+
+.tplus-log-line {
+  color: #e2e8f0 !important;
+  line-height: 1.35 !important;
+  word-break: break-word !important;
+}
+
+.tplus-log-line.success {
+  color: #4ade80 !important;
+}
+
+.tplus-log-line.working {
+  color: #60a5fa !important;
+}
+
+.tplus-log-line.warning {
+  color: #fbbf24 !important;
+}
+
+.tplus-log-line.error {
+  color: #f87171 !important;
+}
+
+.tplus-log-time {
+  color: #64748b !important;
+  font-size: 10px !important;
+  margin-right: 4px !important;
+}

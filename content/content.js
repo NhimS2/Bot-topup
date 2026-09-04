@@ -253,24 +253,32 @@
   // ==========================================
 
   function findFromDateInput() {
+    // 1. Tìm chính xác theo name/class chuẩn của trang web TTW
+    const directInput = document.querySelector('input[name="from_date"], input[name="from"], input.date-picker, input.datepicker');
+    if (directInput) return directInput;
+
+    // 2. Tìm theo label chứa chữ 'from' hoặc 'từ ngày'
     const labels = Array.from(document.querySelectorAll('label, div, span, p'));
     for (const label of labels) {
       const txt = norm(label.textContent);
-      if (txt === 'from' || txt === 'from date' || txt === 'from:') {
+      if (txt === 'from' || txt === 'from date' || txt === 'from:' || txt.includes('from date') || txt.includes('từ ngày')) {
         const input = label.querySelector('input') ||
           label.nextElementSibling?.querySelector('input') ||
-          (label.nextElementSibling?.tagName === 'INPUT' ? label.nextElementSibling : null);
+          (label.nextElementSibling?.tagName === 'INPUT' ? label.nextElementSibling : null) ||
+          label.closest('.form-group, .col-md-3, .col-sm-4, div')?.querySelector('input');
         if (input) return input;
       }
     }
 
-    const namedInputs = document.querySelectorAll('input[name*="from" i], input[id*="from" i], input[placeholder*="from" i]');
+    // 3. Tìm theo name, id, placeholder
+    const namedInputs = document.querySelectorAll('input[name*="from" i], input[placeholder*="from" i]');
     if (namedInputs.length > 0) return namedInputs[0];
 
+    // 4. Fallback: Ô input date hoặc có giá trị ngày
     const allInputs = Array.from(document.querySelectorAll('input[type="text"], input[type="date"]'));
     for (const input of allInputs) {
       const val = (input.value || '').trim();
-      if (/^\d{4}-\d{2}-\d{2}$/.test(val)) {
+      if (/^\d{4}[-/]\d{2}[-/]\d{2}$/.test(val) || /^\d{2}[-/]\d{2}[-/]\d{4}$/.test(val)) {
         return input;
       }
     }
@@ -290,9 +298,7 @@
   }
 
   async function handleSetFromDateAndSearch(targetDateStr = '2026-08-15', sendResponse) {
-    const dayMatch = (targetDateStr || '').match(/-(\d{1,2})$/);
-    const targetDay = dayMatch ? String(parseInt(dayMatch[1], 10)) : '15';
-    logLive(`📅 [Bước 1]: Mở lịch chọn ngày From: ${targetDateStr}`, 'working');
+    logLive(`📅 [Bước 1]: Đang chỉnh ngày From Date: ${targetDateStr}`, 'working');
     updateCurrentStepBanner(`Đang chỉnh ngày From: ${targetDateStr}...`);
 
     const fromInput = await waitForElement(findFromDateInput, 6000);
@@ -302,37 +308,26 @@
       return;
     }
 
-    fromInput.focus();
-    fromInput.click();
-    await sleep(800);
-
-    const dayCells = Array.from(document.querySelectorAll(
-      '.datepicker-days td, .datepicker td, .flatpickr-day, td.day, div.day, span.day, .calendar td'
-    ));
-
-    for (const cell of dayCells) {
-      const txt = (cell.innerText || cell.textContent || '').trim();
-      const isNotOtherMonth = !cell.classList.contains('old') && !cell.classList.contains('new') && !cell.classList.contains('disabled');
-      if (txt === targetDay && isNotOtherMonth && cell.offsetParent !== null) {
-        logLive(`🎯 Đã chọn ô ngày ${targetDay} trên bảng lịch.`, 'working');
-        cell.click();
-        await sleep(600);
-        break;
-      }
-    }
-
+    // 1. Gán trực tiếp giá trị ngày mục tiêu vào ô input
     setInputValue(fromInput, targetDateStr);
+    fromInput.value = targetDateStr;
+
+    // 2. Kích hoạt toàn bộ các event để plugin và form ghi nhận
     fromInput.dispatchEvent(new Event('input', { bubbles: true }));
     fromInput.dispatchEvent(new Event('change', { bubbles: true }));
     fromInput.dispatchEvent(new CustomEvent('changeDate', { bubbles: true }));
+    fromInput.dispatchEvent(new CustomEvent('dp.change', { bubbles: true }));
 
+    // 3. Nếu có Datepicker popup đang mở, đóng nó lại mà không làm mất giá trị
+    const datepickerPopups = document.querySelectorAll('.datepicker, .datetimepicker, .flatpickr-calendar');
+    datepickerPopups.forEach(pop => {
+      pop.style.display = 'none';
+    });
+
+    logLive(`🎯 Đã set ngày From: ${targetDateStr}`, 'success');
     await sleep(600);
 
-    const emptyArea = document.querySelector('.card, .main-content, .topups-logs, h1, h2, h3, h4') || document.body;
-    emptyArea.click();
-    fromInput.blur();
-    await sleep(800);
-
+    // 4. Bấm nút Search để nạp lại dữ liệu
     const searchBtn = await waitForElement(findSearchButton, 5000);
     if (searchBtn) {
       logLive(`🔍 Đang bấm nút [Search] để tải lại bảng dữ liệu...`, 'working');

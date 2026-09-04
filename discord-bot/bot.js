@@ -127,29 +127,32 @@ async function buildControlPanelPayload() {
 
   embed.setFooter({ text: 'TPlus Cloud Controller • Tự động dọn dẹp và cập nhật mỗi 5 giây' });
 
+  const anyRunning = onlineDevices.some(d => d.status === 'running');
+  const anyPaused = onlineDevices.some(d => d.status === 'paused');
+  const isAutoEnabled = onlineDevices.length > 0 ? onlineDevices.some(d => d.enabled !== false && d.status !== 'disabled') : true;
+
   // 1. Hàng nút điều khiển TOÀN BỘ MÁY
-  const globalRow = new ActionRowBuilder().addComponents(
-    new ButtonBuilder()
-      .setCustomId('btn_global_run')
-      .setLabel('⚡ Chạy Tất Cả')
-      .setStyle(ButtonStyle.Primary),
-    new ButtonBuilder()
-      .setCustomId('btn_global_pause')
-      .setLabel('⏸ Tạm Dừng Tất Cả')
-      .setStyle(ButtonStyle.Secondary),
-    new ButtonBuilder()
-      .setCustomId('btn_global_resume')
-      .setLabel('▶ Tiếp Tục Tất Cả')
-      .setStyle(ButtonStyle.Success),
-    new ButtonBuilder()
-      .setCustomId('btn_global_stop')
-      .setLabel('⏹ Dừng Tất Cả')
-      .setStyle(ButtonStyle.Danger),
-    new ButtonBuilder()
-      .setCustomId('btn_refresh_panel')
-      .setLabel('🔄')
-      .setStyle(ButtonStyle.Secondary)
-  );
+  const runBtn = new ButtonBuilder()
+    .setCustomId(anyPaused ? 'btn_global_resume' : (anyRunning ? 'btn_global_pause' : 'btn_global_run'))
+    .setLabel(anyPaused ? '▶ Tiếp Tục Vòng Lặp' : (anyRunning ? '⏸ Tạm Dừng Vòng Lặp' : '⚡ Chạy Toàn Bộ Vòng Lặp Ngay'))
+    .setStyle(anyPaused ? ButtonStyle.Success : (anyRunning ? ButtonStyle.Secondary : ButtonStyle.Primary));
+
+  const stopBtn = new ButtonBuilder()
+    .setCustomId('btn_global_stop')
+    .setLabel('⏹ Dừng')
+    .setStyle(ButtonStyle.Danger);
+
+  const toggleAutoBtn = new ButtonBuilder()
+    .setCustomId('btn_toggle_auto')
+    .setLabel(isAutoEnabled ? '🟢 Auto: ĐANG BẬT' : '🔴 Auto: ĐANG TẮT')
+    .setStyle(isAutoEnabled ? ButtonStyle.Success : ButtonStyle.Danger);
+
+  const refreshBtn = new ButtonBuilder()
+    .setCustomId('btn_refresh_panel')
+    .setLabel('🔄')
+    .setStyle(ButtonStyle.Secondary);
+
+  const globalRow = new ActionRowBuilder().addComponents(runBtn, stopBtn, toggleAutoBtn, refreshBtn);
 
   const components = [globalRow];
 
@@ -283,6 +286,16 @@ client.on('interactionCreate', async (interaction) => {
       if (customId === 'btn_refresh_panel') {
         const payload = await buildControlPanelPayload();
         await interaction.update(payload);
+        return;
+      }
+
+      if (customId === 'btn_toggle_auto') {
+        await sendCommandToFirebase('global', 'TOGGLE_ENABLED');
+        await interaction.reply({
+          content: `🔁 **LỆNH TẤT CẢ MÁY:** Đã gửi lệnh **BẬT/TẮT TỰ ĐỘNG HÓA** tới toàn bộ máy!`,
+          ephemeral: true
+        });
+        setTimeout(autoUpdatePanels, 1500);
         return;
       }
 

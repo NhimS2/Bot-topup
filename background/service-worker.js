@@ -169,16 +169,18 @@ async function sendFirebaseHeartbeat(stepText = '') {
       currentRunningStep = stepText;
     }
 
+    const isEnabled = config.enabled !== false;
     let status = 'idle';
-    if (config.isLoopPaused) status = 'paused';
+    if (!isEnabled) status = 'disabled';
+    else if (config.isLoopPaused) status = 'paused';
     else if (config.isLoopRunning) status = 'running';
-    else if (config.enabled === false) status = 'disabled';
 
     const payload = {
       deviceId,
       deviceName: deviceName || config.email || deviceId,
       email: config.email || '',
       status,
+      enabled: isEnabled,
       currentStep: currentRunningStep,
       lastActive: Date.now(),
       lastActiveFormatted: new Date().toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit', second: '2-digit' }),
@@ -245,6 +247,27 @@ async function pollFirebaseCommands() {
       } else if (!isLoopRunning) {
         runFullMultiProjectLoop('discord');
       }
+    } else if (action === 'TOGGLE_ENABLED' || action === 'ENABLE' || action === 'DISABLE') {
+      const { enabled = true, intervalMinutes = 60 } = await chrome.storage.local.get(['enabled', 'intervalMinutes']);
+      let newEnabled = !enabled;
+      if (action === 'ENABLE') newEnabled = true;
+      if (action === 'DISABLE') newEnabled = false;
+      if (targetCommand.enabled !== undefined) newEnabled = !!targetCommand.enabled;
+
+      await chrome.storage.local.set({ enabled: newEnabled });
+      await updateBadge(newEnabled);
+      await setupAlarm(newEnabled, intervalMinutes);
+      addLog({ type: 'info', text: `📡 Đã ${newEnabled ? 'BẬT' : 'TẮT'} tự động hóa theo lệnh Discord!` });
+    } else if (action === 'UPDATE_CONFIG') {
+      const updates = {};
+      if (targetCommand.fromDate) updates.fromDate = targetCommand.fromDate;
+      if (targetCommand.intervalMinutes) updates.intervalMinutes = parseInt(targetCommand.intervalMinutes, 10);
+      await chrome.storage.local.set(updates);
+      const { enabled = true, intervalMinutes = 60 } = await chrome.storage.local.get(['enabled', 'intervalMinutes']);
+      if (updates.intervalMinutes) {
+        await setupAlarm(enabled, intervalMinutes);
+      }
+      addLog({ type: 'success', text: `📡 Đã cập nhật cấu hình từ Discord: FromDate=${targetCommand.fromDate || ''}, Interval=${targetCommand.intervalMinutes || ''}p` });
     }
 
     await sendFirebaseHeartbeat();
@@ -363,19 +386,15 @@ async function findOrCreateTargetTab() {
   try {
     const tabs = await chrome.tabs.query({ url: TARGET_URL_PATTERN });
     if (tabs && tabs.length > 0) {
+      // Đã mở tab TTW: Dùng tab đó chạy ngầm, TUYỆT ĐỐI KHÔNG switch active tab, KHÔNG focus window
       const tab = tabs.find(t => t.active) || tabs[0];
-      await chrome.tabs.update(tab.id, { active: true });
-      try {
-        await chrome.windows.update(tab.windowId, { focused: true });
-      } catch (e) { }
+      console.log(`[TPlus Auto] Đã tìm thấy tab TTW (ID: ${tab.id}), tiến hành thao tác ngầm ở nền.`);
       return tab;
     }
 
-    console.log('[TPlus Auto] Mở tab mới https://ttw-int.t-plus.vn/...');
-    const newTab = await chrome.tabs.create({ url: HOME_URL, active: true });
-    try {
-      await chrome.windows.update(newTab.windowId, { focused: true });
-    } catch (e) { }
+    // Chưa mở tab TTW: Mở tab mới ở chế độ nền (active: false) để không làm gián đoạn người dùng
+    console.log('[TPlus Auto] Mở tab mới https://ttw-int.t-plus.vn/ ở chế độ nền (active: false)...');
+    const newTab = await chrome.tabs.create({ url: HOME_URL, active: false });
     await waitForTabComplete(newTab.id);
     await sleep(3000);
     return newTab;

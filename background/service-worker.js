@@ -48,7 +48,9 @@ const DEFAULT_CONFIG = {
   logs: [],
   widgetLogs: [],
   selectedProjects: ['biasg-2025-rcp5', 'bia333-spring-25'],
-  isBotOnline: false
+  isBotOnline: false,
+  accessCode: '',
+  isCodeVerified: false
 };
 
 let isLoopCancelled = false;
@@ -296,6 +298,7 @@ function startFirebaseSyncLoop() {
   sendFirebaseHeartbeat();
   checkBotStatus();
   syncInterval = setInterval(async () => {
+    await verifyAccessCodeOnServer();
     await pollFirebaseCommands();
     await sendFirebaseHeartbeat();
     await checkBotStatus();
@@ -585,10 +588,65 @@ async function processTabMultiPage(tabId, proj, stepName, fromDate, config) {
   return totalRecords;
 }
 
+async function verifyAccessCodeOnServer() {
+  try {
+    const { accessCode = '', isLoopRunning = false } = await chrome.storage.local.get(['accessCode', 'isLoopRunning']);
+    const rawCode = (accessCode || '').trim();
+
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 4000);
+    // Thêm ?t= và cache: 'no-store' để lấy mã mới nhất từ Firebase ngay lập tức
+    const res = await fetch(`${FIREBASE_DB_URL}/auth/access_code.json?t=${Date.now()}`, {
+      signal: controller.signal,
+      cache: 'no-store'
+    }).then(r => r.json()).catch(() => null);
+    clearTimeout(timeoutId);
+
+    if (!res || !res.code) {
+      await chrome.storage.local.set({ isCodeVerified: false, enabled: false });
+      await updateBadge(false);
+      return false;
+    }
+
+    const serverCode = String(res.code).trim();
+    const isValid = (rawCode === serverCode);
+
+    const { isCodeVerified: previousVerified = true, enabled = true } = await chrome.storage.local.get(['isCodeVerified', 'enabled']);
+    await chrome.storage.local.set({ isCodeVerified: isValid });
+
+    if (!isValid) {
+      if (previousVerified || enabled) {
+        console.warn(`[TPlus Auto] 🔒 Mã kích hoạt máy (${rawCode}) không khớp với mã máy chủ (${serverCode})! Tự động khóa.`);
+        await chrome.storage.local.set({ enabled: false });
+        await updateBadge(false);
+        if (isLoopRunning) {
+          await stopLoop();
+        }
+        addLog({
+          type: 'error',
+          text: `🔒 Mã kích hoạt đã bị Admin thay đổi. Auto đã tự động khóa!`
+        });
+      }
+      return false;
+    }
+    return true;
+  } catch (e) {
+    return true;
+  }
+}
+
 async function runFullMultiProjectLoop(reason = 'scheduled') {
   isLoopCancelled = false;
   isLoopPaused = false;
   pauseResolver = null;
+
+  // 0. Xác thực mã kích hoạt trước khi cho phép chạy
+  const isAuthorized = await verifyAccessCodeOnServer();
+  if (!isAuthorized) {
+    await chrome.storage.local.set({ isLoopRunning: false, isLoopPaused: false });
+    await updateBadge(false);
+    return { success: false, message: 'Mã kích hoạt không hợp lệ hoặc đã hết hạn.' };
+  }
 
   await chrome.storage.local.set({ isLoopRunning: true, isLoopPaused: false });
   await updateBadge(true, true, false);
@@ -760,9 +818,9 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
         sendResponse({ success: true, enabled });
       }
       else if (request.action === 'UPDATE_CONFIG') {
-        const { intervalMinutes, autoLogin, email, password, fromDate, blockedPhones, showWidget, selectedProjects, deviceName, enableCloudControl } = request;
+        const { intervalMinutes, autoLogin, email, password, fromDate, blockedPhones, showWidget, selectedProjects, deviceName, enableCloudControl, accessCode } = request;
         const { enabled } = await chrome.storage.local.get('enabled');
-        await chrome.storage.local.set({
+        const updates = {
           intervalMinutes,
           autoLogin,
           email,
@@ -773,7 +831,9 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
           selectedProjects,
           deviceName: deviceName || email,
           enableCloudControl: enableCloudControl !== false
-        });
+        };
+        if (accessCode !== undefined) updates.accessCode = accessCode;
+        await chrome.storage.local.set(updates);
         await setupAlarm(enabled, intervalMinutes);
         await sendFirebaseHeartbeat();
         sendResponse({ success: true });

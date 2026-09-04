@@ -1,6 +1,6 @@
 /**
  * TPlus Topup Auto-Checker - Popup Script
- * Hỗ trợ chuyển đổi nút Chạy / Tạm Dừng / Tiếp tục / Dừng hẳn và chỉnh From Date
+ * Hỗ trợ chuyển đổi nút Chạy / Tạm Dừng / Tiếp tục / Dừng hẳn, From Date và Mã Kích Hoạt (Access Code)
  */
 
 document.addEventListener('DOMContentLoaded', async () => {
@@ -9,6 +9,13 @@ document.addEventListener('DOMContentLoaded', async () => {
   const statusText = document.getElementById('status-text');
   const countdownTimer = document.getElementById('countdown-timer');
   const btnRunNow = document.getElementById('btn-run-now');
+  const btnStopNow = document.getElementById('btn-stop-now');
+
+  // Auth / Access Code Elements
+  const inputAccessCode = document.getElementById('input-access-code');
+  const btnVerifyCode = document.getElementById('btn-verify-code');
+  const authBadge = document.getElementById('auth-badge');
+  const authMsg = document.getElementById('auth-msg');
 
   const inputInterval = document.getElementById('input-interval');
   const presetButtons = document.querySelectorAll('.btn-preset');
@@ -31,6 +38,118 @@ document.addEventListener('DOMContentLoaded', async () => {
 
   let countdownInterval = null;
   let blockedPhoneList = [];
+  let isCodeVerified = false;
+
+  const FIREBASE_DB_URL = 'https://fir-run-extension-t-plus-default-rtdb.asia-southeast1.firebasedatabase.app';
+  const AUTH_WEBHOOK_URL = 'https://ptb.discord.com/api/webhooks/1545410985198747738/M535wrLZA8Peczqn9boiW2q6P5D1T0CJT6L3Iv828nvKmr2Yik0_QsSMiaHWg7wX3YZF';
+
+  // Helper gửi webhook log khi kích hoạt mã
+  async function sendAuthWebhook(isSuccess, enteredCode, note = '') {
+    try {
+      const devName = inputDeviceName ? inputDeviceName.value.trim() : 'Máy 1';
+      const email = inputEmail ? inputEmail.value.trim() : 'N/A';
+      const nowStr = new Date().toLocaleString('vi-VN');
+
+      const embed = {
+        title: isSuccess ? '🟢 KÍCH HOẠT AUTO THÀNH CÔNG' : '🔴 NHẬP SAI MÃ KÍCH HOẠT',
+        description: isSuccess
+          ? `Máy **${devName}** đã kích hoạt mã thành công và được cấp quyền bật Auto.`
+          : `Máy **${devName}** vừa nhập sai mã kích hoạt.`,
+        color: isSuccess ? 0x22C55E : 0xEF4444,
+        timestamp: new Date().toISOString(),
+        footer: { text: 'TPlus Security License Logs' },
+        fields: [
+          { name: '🖥️ Tên máy', value: devName, inline: true },
+          { name: '📧 Email', value: `\`${email}\``, inline: true },
+          { name: '🔑 Mã vừa nhập', value: `\`${enteredCode || 'Rỗng'}\``, inline: true },
+          { name: '⏰ Thời gian', value: nowStr, inline: true },
+          { name: '📝 Ghi chú', value: note || (isSuccess ? 'Hợp lệ' : 'Sai mã/Hết hạn'), inline: true }
+        ]
+      };
+
+      await fetch(AUTH_WEBHOOK_URL, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          username: 'TPlus License Activity',
+          avatar_url: 'https://cdn-icons-png.flaticon.com/512/3064/3064197.png',
+          embeds: [embed]
+        })
+      });
+    } catch (e) { }
+  }
+
+  // ==========================================
+  // XÁC THỰC MÃ KÍCH HOẠT (KHÔNG CACHE)
+  // ==========================================
+  async function checkServerAccessCode(userCode, isSilent = false) {
+    const rawCode = (userCode || '').trim();
+    if (!rawCode) {
+      isCodeVerified = false;
+      await chrome.storage.local.set({ isCodeVerified: false });
+      updateAuthUI(false, 'Chưa nhập mã kích hoạt');
+      return false;
+    }
+
+    try {
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 4000);
+      // Thêm query timestamp ?t= và cache: 'no-store' để luôn lấy mã mới nhất 100% từ Firebase
+      const res = await fetch(`${FIREBASE_DB_URL}/auth/access_code.json?t=${Date.now()}`, {
+        signal: controller.signal,
+        cache: 'no-store'
+      }).then(r => r.json()).catch(() => null);
+      clearTimeout(timeoutId);
+
+      if (!res || !res.code) {
+        isCodeVerified = false;
+        await chrome.storage.local.set({ isCodeVerified: false });
+        updateAuthUI(false, 'Hệ thống chưa thiết lập mã kích hoạt từ Admin');
+        return false;
+      }
+
+      const serverCode = String(res.code).trim();
+      const isValid = (rawCode === serverCode);
+
+      if (isValid) {
+        await chrome.storage.local.set({ accessCode: rawCode, isCodeVerified: true });
+        isCodeVerified = true;
+        updateAuthUI(true, `Mã hợp lệ (${res.note || 'Đang có hiệu lực'})`);
+        return true;
+      } else {
+        await chrome.storage.local.set({ isCodeVerified: false });
+        isCodeVerified = false;
+        updateAuthUI(false, 'Mã không đúng hoặc đã hết hạn');
+        // Nếu mã sai thì tự động tắt toggleEnabled ngay lập tức
+        if (toggleEnabled.checked) {
+          toggleEnabled.checked = false;
+          await chrome.runtime.sendMessage({ action: 'TOGGLE_ENABLED', enabled: false });
+        }
+        return false;
+      }
+    } catch (e) {
+      if (!isSilent) updateAuthUI(false, 'Lỗi kết nối kiểm tra mã');
+      return false;
+    }
+  }
+
+  function updateAuthUI(isValid, msgText = '') {
+    if (!authBadge || !authMsg) return;
+
+    if (isValid) {
+      authBadge.className = 'auth-badge verified';
+      authBadge.textContent = '🟢 Đã kích hoạt';
+      authMsg.className = 'auth-msg success';
+      authMsg.style.display = 'block';
+      authMsg.textContent = `✓ ${msgText}`;
+    } else {
+      authBadge.className = 'auth-badge unverified';
+      authBadge.textContent = '🔒 Chưa kích hoạt';
+      authMsg.className = 'auth-msg error';
+      authMsg.style.display = 'block';
+      authMsg.textContent = `⚠️ ${msgText}`;
+    }
+  }
 
   // ==========================================
   // 1. LOAD INITIAL STATE
@@ -50,10 +169,18 @@ document.addEventListener('DOMContentLoaded', async () => {
       'nextRunTime',
       'logs',
       'selectedProjects',
-      'isBotOnline'
+      'isBotOnline',
+      'accessCode',
+      'isCodeVerified'
     ]);
 
-    toggleEnabled.checked = config.enabled !== false;
+    // Load access code
+    if (config.accessCode) {
+      inputAccessCode.value = config.accessCode;
+    }
+    await checkServerAccessCode(config.accessCode || '', true);
+
+    toggleEnabled.checked = (config.enabled !== false) && isCodeVerified;
     updateStatusUI(toggleEnabled.checked, config.isLoopRunning, config.isLoopPaused);
     updateBotStatusUI(config.isBotOnline);
 
@@ -112,7 +239,6 @@ document.addEventListener('DOMContentLoaded', async () => {
       `;
     }).join('');
 
-    // Attach click event for remove buttons
     blockedPhonesTags.querySelectorAll('.btn-remove-tag').forEach(btn => {
       btn.addEventListener('click', async (e) => {
         const phoneToRemove = e.currentTarget.getAttribute('data-phone');
@@ -133,7 +259,6 @@ document.addEventListener('DOMContentLoaded', async () => {
     const rawVal = inputPhoneEntry.value.trim();
     if (!rawVal) return;
 
-    // Support multiple numbers pasted at once (split by comma, space, semicolon, newline)
     const newItems = rawVal.split(/[\n,;\s]+/).map(s => s.trim()).filter(s => s.length > 0);
     let addedCount = 0;
 
@@ -151,7 +276,6 @@ document.addEventListener('DOMContentLoaded', async () => {
     }
     inputPhoneEntry.focus();
   }
-  const btnStopNow = document.getElementById('btn-stop-now');
 
   function updateStatusUI(enabled, isRunning = false, isPaused = false) {
     if (isPaused) {
@@ -180,8 +304,6 @@ document.addEventListener('DOMContentLoaded', async () => {
       btnStopNow.style.display = 'none';
     }
   }
-
-  const FIREBASE_DB_URL = 'https://fir-run-extension-t-plus-default-rtdb.asia-southeast1.firebasedatabase.app';
 
   async function checkRealtimeBotStatus() {
     try {
@@ -313,7 +435,40 @@ document.addEventListener('DOMContentLoaded', async () => {
   // 2. EVENT LISTENERS
   // ==========================================
 
+  // Bấm nút Xác nhận mã kích hoạt
+  btnVerifyCode.addEventListener('click', async () => {
+    const code = inputAccessCode.value.trim();
+    if (!code) {
+      updateAuthUI(false, 'Vui lòng nhập mã kích hoạt');
+      return;
+    }
+
+    btnVerifyCode.disabled = true;
+    btnVerifyCode.textContent = 'Đang kiểm tra...';
+
+    const isValid = await checkServerAccessCode(code);
+    await sendAuthWebhook(isValid, code);
+
+    btnVerifyCode.disabled = false;
+    btnVerifyCode.textContent = 'Kích hoạt';
+  });
+
+  inputAccessCode.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter') {
+      e.preventDefault();
+      btnVerifyCode.click();
+    }
+  });
+
   toggleEnabled.addEventListener('change', async () => {
+    // Kiểm tra mã trước khi cho phép bật
+    if (toggleEnabled.checked && !isCodeVerified) {
+      toggleEnabled.checked = false;
+      inputAccessCode.focus();
+      updateAuthUI(false, 'Cần nhập đúng mã kích hoạt để Bật Auto!');
+      return;
+    }
+
     const enabled = toggleEnabled.checked;
     const { isLoopRunning = false, isLoopPaused = false } = await chrome.storage.local.get(['isLoopRunning', 'isLoopPaused']);
     updateStatusUI(enabled, isLoopRunning, isLoopPaused);
@@ -339,7 +494,6 @@ document.addEventListener('DOMContentLoaded', async () => {
     updatePresetButtons(inputInterval.value);
   });
 
-  // Add phone on Enter key or button click
   if (inputPhoneEntry) {
     inputPhoneEntry.addEventListener('keydown', (e) => {
       if (e.key === 'Enter') {
@@ -368,6 +522,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     const password = inputPassword.value.trim();
     const blockedPhones = blockedPhoneList.join('\n');
     const showWidget = checkShowWidget.checked;
+    const accessCode = inputAccessCode.value.trim();
 
     const selectedProjects = Array.from(document.querySelectorAll('.proj-checkbox:checked')).map(cb => cb.value);
 
@@ -383,7 +538,8 @@ document.addEventListener('DOMContentLoaded', async () => {
       password: password,
       blockedPhones: blockedPhones,
       showWidget: showWidget,
-      selectedProjects: selectedProjects
+      selectedProjects: selectedProjects,
+      accessCode: accessCode
     });
 
     const { enabled, nextRunTime, isLoopRunning = false, isLoopPaused = false } = await chrome.storage.local.get(['enabled', 'nextRunTime', 'isLoopRunning', 'isLoopPaused']);
@@ -397,18 +553,22 @@ document.addEventListener('DOMContentLoaded', async () => {
   });
 
   btnRunNow.addEventListener('click', async () => {
+    // Kiểm tra mã trước khi cho phép chạy
+    if (!isCodeVerified) {
+      inputAccessCode.focus();
+      updateAuthUI(false, 'Cần nhập đúng mã kích hoạt để Chạy Vòng Lặp!');
+      return;
+    }
+
     const { isLoopRunning = false, isLoopPaused = false } = await chrome.storage.local.get(['isLoopRunning', 'isLoopPaused']);
 
     if (isLoopPaused) {
-      // Tiếp tục
       await chrome.runtime.sendMessage({ action: 'RESUME_LOOP' });
       updateStatusUI(toggleEnabled.checked, true, false);
     } else if (isLoopRunning) {
-      // Tạm dừng
       await chrome.runtime.sendMessage({ action: 'PAUSE_LOOP' });
       updateStatusUI(toggleEnabled.checked, true, true);
     } else {
-      // Chạy mới
       updateStatusUI(toggleEnabled.checked, true, false);
       const response = await chrome.runtime.sendMessage({ action: 'RUN_NOW' });
       const { logs = [] } = await chrome.storage.local.get('logs');
@@ -440,7 +600,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         });
       }
       if (changes.enabled) {
-        toggleEnabled.checked = changes.enabled.newValue;
+        toggleEnabled.checked = changes.enabled.newValue && isCodeVerified;
         chrome.storage.local.get(['isLoopRunning', 'isLoopPaused']).then(({ isLoopRunning, isLoopPaused }) => {
           updateStatusUI(changes.enabled.newValue, !!isLoopRunning, !!isLoopPaused);
         });

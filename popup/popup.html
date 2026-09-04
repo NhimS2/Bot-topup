@@ -51,6 +51,25 @@
       </div>
     </div>
 
+    <!-- License & Access Code Card -->
+    <div class="card auth-card" id="auth-card">
+      <div class="auth-header">
+        <div class="auth-title">
+          <span>🔑</span> <strong>Mã Kích Hoạt (Access Code):</strong>
+        </div>
+        <span class="auth-badge" id="auth-badge">Đang kiểm tra...</span>
+      </div>
+      <div class="auth-body">
+        <div style="display: flex; gap: 6px; margin-top: 6px;">
+          <input type="text" id="input-access-code" class="form-input" placeholder="Nhập mã từ Admin để bật Auto..."
+            style="font-family: monospace; font-size: 12px; letter-spacing: 1px; font-weight: 600;">
+          <button type="button" class="btn btn-primary" id="btn-verify-code"
+            style="width: auto; padding: 0 12px; white-space: nowrap; font-size: 11px;">Kích hoạt</button>
+        </div>
+        <div class="auth-msg" id="auth-msg" style="display:none; font-size:11px; margin-top:6px;"></div>
+      </div>
+    </div>
+
     <!-- Discord Bot Status & Reminder Card -->
     <div class="card bot-status-card" id="bot-status-card">
       <div class="bot-status-row">

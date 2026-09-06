@@ -18,6 +18,8 @@ document.addEventListener('DOMContentLoaded', async () => {
   const authMsg = document.getElementById('auth-msg');
 
   const inputInterval = document.getElementById('input-interval');
+  const inputStartTime = document.getElementById('input-start-time');
+  const inputEndTime = document.getElementById('input-end-time');
   const presetButtons = document.querySelectorAll('.btn-preset');
   const inputFromDate = document.getElementById('input-from-date');
   const inputDeviceName = document.getElementById('input-device-name');
@@ -158,6 +160,8 @@ document.addEventListener('DOMContentLoaded', async () => {
     const config = await chrome.storage.local.get([
       'enabled',
       'intervalMinutes',
+      'autoStartTime',
+      'autoEndTime',
       'fromDate',
       'deviceName',
       'email',
@@ -187,6 +191,9 @@ document.addEventListener('DOMContentLoaded', async () => {
     const interval = config.intervalMinutes || 60;
     inputInterval.value = interval;
     updatePresetButtons(interval);
+
+    inputStartTime.value = config.autoStartTime || '00:00';
+    inputEndTime.value = config.autoEndTime || '23:59';
 
     inputFromDate.value = config.fromDate || '2026-08-15';
     if (inputDeviceName) {
@@ -367,7 +374,7 @@ document.addEventListener('DOMContentLoaded', async () => {
       return `
         <div class="log-item ${typeClass}">
           <span class="log-time">${item.displayTime || ''}</span>
-          <strong>${icon} ${tabBadge}</strong> ${escapeHtml(item.message || '')}
+          <strong>${icon} ${tabBadge}</strong> ${escapeHtml(item.text || item.message || '')}
         </div>
       `;
     }).join('');
@@ -516,6 +523,8 @@ document.addEventListener('DOMContentLoaded', async () => {
       inputInterval.value = 60;
     }
 
+    const autoStartTime = inputStartTime.value.trim() || '00:00';
+    const autoEndTime = inputEndTime.value.trim() || '23:59';
     const fromDate = inputFromDate.value.trim() || '2026-08-15';
     const deviceName = inputDeviceName ? inputDeviceName.value.trim() : '';
     const email = inputEmail.value.trim();
@@ -532,6 +541,8 @@ document.addEventListener('DOMContentLoaded', async () => {
     await chrome.runtime.sendMessage({
       action: 'UPDATE_CONFIG',
       intervalMinutes: interval,
+      autoStartTime: autoStartTime,
+      autoEndTime: autoEndTime,
       fromDate: fromDate,
       deviceName: deviceName || email,
       email: email,
@@ -541,6 +552,34 @@ document.addEventListener('DOMContentLoaded', async () => {
       selectedProjects: selectedProjects,
       accessCode: accessCode
     });
+
+    // Kiểm tra xem có đang nằm trong khung giờ không
+    const now = new Date();
+    const currentMinutes = now.getHours() * 60 + now.getMinutes();
+    const parseTime = (timeStr) => {
+      const parts = timeStr.split(':');
+      return parseInt(parts[0], 10) * 60 + parseInt(parts[1], 10);
+    };
+    const startMins = parseTime(autoStartTime);
+    const endMins = parseTime(autoEndTime);
+    let isWithinTimeframe = false;
+    if (startMins <= endMins) {
+      isWithinTimeframe = currentMinutes >= startMins && currentMinutes <= endMins;
+    } else {
+      isWithinTimeframe = currentMinutes >= startMins || currentMinutes <= endMins;
+    }
+
+    // Nếu đang BẬT và nằm TRONG khung giờ thì chạy luôn
+    if (toggleEnabled.checked && isWithinTimeframe) {
+      updateStatusUI(true, true, false);
+      chrome.runtime.sendMessage({ action: 'RUN_NOW' });
+    } else if (!isWithinTimeframe) {
+      if (toggleEnabled.checked) updateStatusUI(true, false, false);
+      chrome.runtime.sendMessage({ 
+        action: 'ADD_LOG', 
+        entry: { type: 'warning', text: `⏸ Đã lưu. Đang chờ đến khung giờ (${autoStartTime} - ${autoEndTime}) để chạy tự động.` }
+      });
+    }
 
     const { enabled, nextRunTime, isLoopRunning = false, isLoopPaused = false } = await chrome.storage.local.get(['enabled', 'nextRunTime', 'isLoopRunning', 'isLoopPaused']);
     startCountdown(enabled, nextRunTime, isLoopRunning, isLoopPaused);

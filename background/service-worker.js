@@ -656,6 +656,8 @@ async function runFullMultiProjectLoop(reason = 'scheduled') {
   const config = await chrome.storage.local.get([
     'enabled',
     'intervalMinutes',
+    'autoStartTime',
+    'autoEndTime',
     'autoLogin',
     'email',
     'password',
@@ -669,6 +671,33 @@ async function runFullMultiProjectLoop(reason = 'scheduled') {
     await chrome.storage.local.set({ isLoopRunning: false, isLoopPaused: false });
     await updateBadge(false);
     return { success: false, message: 'Đang tắt tự động hóa' };
+  }
+
+  if (config.autoStartTime && config.autoEndTime && reason === 'scheduled') {
+    const now = new Date();
+    const currentMinutes = now.getHours() * 60 + now.getMinutes();
+
+    const parseTime = (timeStr) => {
+      const parts = timeStr.split(':');
+      return parseInt(parts[0], 10) * 60 + parseInt(parts[1], 10);
+    };
+
+    const startMins = parseTime(config.autoStartTime);
+    const endMins = parseTime(config.autoEndTime);
+
+    let isWithinTimeframe = false;
+    if (startMins <= endMins) {
+      isWithinTimeframe = currentMinutes >= startMins && currentMinutes <= endMins;
+    } else {
+      isWithinTimeframe = currentMinutes >= startMins || currentMinutes <= endMins;
+    }
+
+    if (!isWithinTimeframe) {
+      addLog({ type: 'warning', text: `⏳ Đang ngoài khung giờ chạy tự động (${config.autoStartTime} - ${config.autoEndTime}). Bỏ qua vòng lặp này.` });
+      await chrome.storage.local.set({ isLoopRunning: false, isLoopPaused: false });
+      await updateBadge(config.enabled, false, false);
+      return { success: false, message: 'Ngoài khung giờ tự động.' };
+    }
   }
 
   try {
@@ -818,27 +847,33 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
         sendResponse({ success: true, enabled });
       }
       else if (request.action === 'UPDATE_CONFIG') {
-        const { intervalMinutes, autoLogin, email, password, fromDate, blockedPhones, showWidget, selectedProjects, deviceName, enableCloudControl, accessCode } = request;
-        const { enabled } = await chrome.storage.local.get('enabled');
-        const updates = {
-          intervalMinutes,
-          autoLogin,
-          email,
-          password,
-          fromDate,
-          blockedPhones,
-          showWidget,
-          selectedProjects,
-          deviceName: deviceName || email,
-          enableCloudControl: enableCloudControl !== false
-        };
-        if (accessCode !== undefined) updates.accessCode = accessCode;
+          const { intervalMinutes, autoLogin, email, password, fromDate, autoStartTime, autoEndTime, blockedPhones, showWidget, selectedProjects, deviceName, enableCloudControl, accessCode } = request;
+          const { enabled } = await chrome.storage.local.get('enabled');
+          const updates = {
+            intervalMinutes,
+            autoLogin,
+            email,
+            password,
+            fromDate,
+            autoStartTime,
+            autoEndTime,
+            blockedPhones,
+            showWidget,
+            selectedProjects,
+            deviceName: deviceName || email,
+            enableCloudControl: enableCloudControl !== false
+          };
+          if (accessCode !== undefined) updates.accessCode = accessCode;
         await chrome.storage.local.set(updates);
         await setupAlarm(enabled, intervalMinutes);
         await sendFirebaseHeartbeat();
         sendResponse({ success: true });
       }
-      else if (request.action === 'RUN_NOW') {
+      else if (request.action === 'ADD_LOG') {
+          await addLog(request.entry);
+          sendResponse({ success: true });
+        }
+        else if (request.action === 'RUN_NOW') {
         const result = await runFullMultiProjectLoop('manual');
         sendResponse(result);
       }

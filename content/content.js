@@ -20,23 +20,55 @@
   let isContentPaused = false;
   let contentPauseResolver = null;
 
+  function isExtensionValid() {
+    return typeof chrome !== 'undefined' && chrome.runtime && !!chrome.runtime.id;
+  }
+
+  async function safeStorageGet(keys, defaultVal = {}) {
+    if (!isExtensionValid()) return defaultVal;
+    try {
+      return (await chrome.storage.local.get(keys)) || defaultVal;
+    } catch (e) {
+      return defaultVal;
+    }
+  }
+
+  async function safeStorageSet(data) {
+    if (!isExtensionValid()) return;
+    try {
+      await chrome.storage.local.set(data);
+    } catch (e) {}
+  }
+
+  async function safeSendMessage(msg) {
+    if (!isExtensionValid()) return null;
+    try {
+      return await chrome.runtime.sendMessage(msg);
+    } catch (e) {
+      return null;
+    }
+  }
+
   // Khởi tạo trạng thái tạm dừng ngay khi inject
-  chrome.storage.local.get(['isLoopPaused']).then(({ isLoopPaused = false }) => {
+  safeStorageGet(['isLoopPaused']).then(({ isLoopPaused = false } = {}) => {
     isContentPaused = !!isLoopPaused;
   });
 
   // Lắng nghe thay đổi trạng thái tạm dừng theo thời gian thực
-  chrome.storage.onChanged.addListener((changes, area) => {
-    if (area === 'local') {
-      if (changes.isLoopPaused !== undefined) {
-        isContentPaused = !!changes.isLoopPaused.newValue;
-        if (!isContentPaused && contentPauseResolver) {
-          contentPauseResolver();
-          contentPauseResolver = null;
+  if (isExtensionValid() && chrome.storage?.onChanged) {
+    chrome.storage.onChanged.addListener((changes, area) => {
+      if (!isExtensionValid()) return;
+      if (area === 'local') {
+        if (changes.isLoopPaused !== undefined) {
+          isContentPaused = !!changes.isLoopPaused.newValue;
+          if (!isContentPaused && contentPauseResolver) {
+            contentPauseResolver();
+            contentPauseResolver = null;
+          }
         }
       }
-    }
-  });
+    });
+  }
 
   async function checkPauseAndCancelInContent() {
     while (isContentPaused) {
@@ -75,18 +107,18 @@
     const timestamp = new Date().toLocaleTimeString('vi-VN', { hour12: false });
 
     // Instead of relying on in-memory liveLogs which might be stale, read directly from storage
-    chrome.storage.local.get('widgetLogs').then(({ widgetLogs = [] }) => {
+    safeStorageGet('widgetLogs').then(({ widgetLogs = [] } = {}) => {
       widgetLogs.push({ time: timestamp, text, type });
       if (widgetLogs.length > 50) widgetLogs.shift();
 
       liveLogs = widgetLogs;
-      chrome.storage.local.set({ widgetLogs: liveLogs });
+      safeStorageSet({ widgetLogs: liveLogs });
       renderLiveLogs();
     });
   }
 
   // Khôi phục log cũ
-  chrome.storage.local.get('widgetLogs').then(({ widgetLogs = [] }) => {
+  safeStorageGet('widgetLogs').then(({ widgetLogs = [] } = {}) => {
     liveLogs = widgetLogs;
     renderLiveLogs();
   });
@@ -504,7 +536,7 @@
 
   async function uncheckExcludedRecords() {
     try {
-      const { blockedPhones = '' } = await chrome.storage.local.get('blockedPhones');
+      const { blockedPhones = '' } = await safeStorageGet('blockedPhones', { blockedPhones: '' });
 
       const blockedList = blockedPhones
         ? blockedPhones
@@ -845,8 +877,14 @@
     const runBtn = document.getElementById('tplus-btn-run');
     if (runBtn) {
       runBtn.addEventListener('click', async () => {
+        const isBotOnline = await checkDirectBotOnlineInContent();
+        if (!isBotOnline) {
+          alert('⚠️ Bot Discord chưa được bật (Offline)! Vui lòng bật Bot Discord trước khi chạy vòng lặp.');
+          logLive('❌ KHÔNG THỂ CHẠY: Bot Discord chưa được bật (Offline)!', 'error');
+          return;
+        }
         logLive('🚀 Người dùng bấm [▶ Chạy Vòng Lặp]', 'working');
-        await chrome.runtime.sendMessage({ action: 'RUN_NOW' });
+        await safeSendMessage({ action: 'RUN_NOW' });
       });
     }
 
@@ -854,7 +892,7 @@
     if (testDiscordBtn) {
       testDiscordBtn.addEventListener('click', async () => {
         logLive('💬 Đang bắn thử webhook @everyone 100 records sang Discord...', 'working');
-        await chrome.runtime.sendMessage({ action: 'TEST_DISCORD_WEBHOOK' });
+        await safeSendMessage({ action: 'TEST_DISCORD_WEBHOOK' });
       });
     }
 
@@ -863,7 +901,7 @@
       pauseBtn.addEventListener('click', async () => {
         logLive('⏸ Người dùng bấm [⏸ TẠM DỪNG]. Auto đang tạm dừng lại tại bước này để bạn kiểm tra.', 'warning');
         updateCurrentStepBanner('Đang TẠM DỪNG (Bấm "Tiếp tục" để chạy tiếp)', true);
-        await chrome.runtime.sendMessage({ action: 'PAUSE_LOOP' });
+        await safeSendMessage({ action: 'PAUSE_LOOP' });
       });
     }
 
@@ -872,7 +910,7 @@
       resumeBtn.addEventListener('click', async () => {
         logLive('▶ Người dùng bấm [▶ TIẾP TỤC]. Auto tiếp tục thực hiện luồng...', 'working');
         updateCurrentStepBanner('Đang tiếp tục luồng tự động...');
-        await chrome.runtime.sendMessage({ action: 'RESUME_LOOP' });
+        await safeSendMessage({ action: 'RESUME_LOOP' });
       });
     }
 
@@ -880,7 +918,7 @@
     if (stopBtn) {
       stopBtn.addEventListener('click', async () => {
         logLive('🛑 Người dùng bấm [⏹ DỪNG HẲN].', 'error');
-        await chrome.runtime.sendMessage({ action: 'STOP_LOOP' });
+        await safeSendMessage({ action: 'STOP_LOOP' });
       });
     }
 
@@ -898,7 +936,7 @@
     if (closeBtn) {
       closeBtn.addEventListener('click', async () => {
         if (widgetElement) widgetElement.style.display = 'none';
-        await chrome.storage.local.set({ showWidget: false });
+        await safeStorageSet({ showWidget: false });
       });
     }
   }
@@ -950,11 +988,12 @@
         isDragging = false;
         document.body.style.userSelect = '';
 
+        if (!isExtensionValid()) return;
         // Lưu lại vị trí khi nhả chuột
-        chrome.storage.local.get('widgetState').then(({ widgetState = {} }) => {
+        safeStorageGet('widgetState').then(({ widgetState = {} } = {}) => {
           widgetState.left = widget.style.left;
           widgetState.top = widget.style.top;
-          chrome.storage.local.set({ widgetState });
+          safeStorageSet({ widgetState });
         });
       }
     });
@@ -964,12 +1003,13 @@
     const resizeObserver = new ResizeObserver((entries) => {
       clearTimeout(resizeTimeout);
       resizeTimeout = setTimeout(() => {
+        if (!isExtensionValid()) return;
         for (let entry of entries) {
           const { width, height } = entry.contentRect;
-          chrome.storage.local.get('widgetState').then(({ widgetState = {} }) => {
+          safeStorageGet('widgetState').then(({ widgetState = {} } = {}) => {
             widgetState.width = width + 'px';
             widgetState.height = height + 'px';
-            chrome.storage.local.set({ widgetState });
+            safeStorageSet({ widgetState });
           });
         }
       }, 500); // Debounce 500ms
@@ -980,7 +1020,7 @@
 
   async function createFloatingWidget() {
     try {
-      const { showWidget = true, isLoopRunning = false, isLoopPaused = false, widgetLogs = [], widgetState = {} } = await chrome.storage.local.get([
+      const { showWidget = true, isLoopRunning = false, isLoopPaused = false, widgetLogs = [], widgetState = {} } = await safeStorageGet([
         'showWidget',
         'isLoopRunning',
         'isLoopPaused',
@@ -1071,7 +1111,7 @@
       clearTimeout(timeoutId);
       const now = Date.now();
       cachedBotOnline = !!(res && res.online && (now - (res.lastActive || 0) < 10000));
-      chrome.storage.local.set({ isBotOnline: cachedBotOnline });
+      await safeStorageSet({ isBotOnline: cachedBotOnline });
       return cachedBotOnline;
     } catch (e) {
       return cachedBotOnline;
@@ -1082,9 +1122,13 @@
     if (countdownTimer) clearInterval(countdownTimer);
 
     const updateCountdown = async () => {
+      if (!isExtensionValid()) {
+        if (countdownTimer) clearInterval(countdownTimer);
+        return;
+      }
       try {
         const isLiveBotOnline = await checkDirectBotOnlineInContent();
-        const { enabled, nextRunTime, showWidget = true, isLoopRunning = false, isLoopPaused = false } = await chrome.storage.local.get([
+        const { enabled, nextRunTime, showWidget = true, isLoopRunning = false, isLoopPaused = false } = await safeStorageGet([
           'enabled',
           'nextRunTime',
           'showWidget',
@@ -1151,88 +1195,94 @@
   // 7. LẮNG NGHE LỆNH TỪ SERVICE WORKER
   // ==========================================
 
-  chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
-    try {
-      if (request.action === 'LOG_MESSAGE') {
-        logLive(request.text, request.type || 'info');
-        sendResponse({ success: true });
-      }
-      else if (request.action === 'CHECK_IS_LOGIN_PAGE') {
-        sendResponse({ isLoginPage: isLoginPage() });
-      }
-      else if (request.action === 'DO_LOGIN') {
-        handleAutoLogin(request.email, request.password, sendResponse);
-      }
-      else if (request.action === 'SET_FROM_DATE_AND_SEARCH') {
-        handleSetFromDateAndSearch(request.fromDate, sendResponse);
-      }
-      else if (request.action === 'GET_RECORDS_INFO') {
-        const info = checkDisplayingRecords();
+  if (isExtensionValid() && chrome.runtime?.onMessage) {
+    chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
+      if (!isExtensionValid()) return false;
+      try {
+        if (request.action === 'LOG_MESSAGE') {
+          logLive(request.text, request.type || 'info');
+          sendResponse({ success: true });
+        }
+        else if (request.action === 'CHECK_IS_LOGIN_PAGE') {
+          sendResponse({ isLoginPage: isLoginPage() });
+        }
+        else if (request.action === 'DO_LOGIN') {
+          handleAutoLogin(request.email, request.password, sendResponse);
+        }
+        else if (request.action === 'SET_FROM_DATE_AND_SEARCH') {
+          handleSetFromDateAndSearch(request.fromDate, sendResponse);
+        }
+        else if (request.action === 'GET_RECORDS_INFO') {
+          const info = checkDisplayingRecords();
 
-        let maxPage = 1;
-        document.querySelectorAll('.pagination .page-link').forEach(link => {
-          const num = parseInt(link.innerText.trim(), 10);
-          if (!isNaN(num) && num > maxPage) {
-            maxPage = num;
-          }
-        });
-
-        sendResponse({ success: true, totalRecords: info.count, totalPages: maxPage });
-      }
-      else if (request.action === 'GO_TO_PAGE') {
-        const targetPage = String(request.page);
-        const pageLinks = Array.from(document.querySelectorAll('a.page-link'));
-        const exactLink = pageLinks.find(a => a.innerText.trim() === targetPage);
-
-        if (exactLink) {
-          exactLink.click();
-          sendResponse({ success: true, navigating: true });
-        } else {
-          // Fallback: modify href of the first page-link if available
-          if (pageLinks.length > 0) {
-            const sampleHref = pageLinks[0].getAttribute('href');
-            if (sampleHref) {
-              const newHref = sampleHref.replace(/page=\d+/, `page=${targetPage}`);
-              window.location.href = newHref;
-              sendResponse({ success: true, navigating: true });
-              return;
+          let maxPage = 1;
+          document.querySelectorAll('.pagination .page-link').forEach(link => {
+            const num = parseInt(link.innerText.trim(), 10);
+            if (!isNaN(num) && num > maxPage) {
+              maxPage = num;
             }
+          });
+
+          sendResponse({ success: true, totalRecords: info.count, totalPages: maxPage });
+        }
+        else if (request.action === 'GO_TO_PAGE') {
+          const targetPage = String(request.page);
+          const pageLinks = Array.from(document.querySelectorAll('a.page-link'));
+          const exactLink = pageLinks.find(a => a.innerText.trim() === targetPage);
+
+          if (exactLink) {
+            exactLink.click();
+            sendResponse({ success: true, navigating: true });
+          } else {
+            // Fallback: modify href of the first page-link if available
+            if (pageLinks.length > 0) {
+              const sampleHref = pageLinks[0].getAttribute('href');
+              if (sampleHref) {
+                const newHref = sampleHref.replace(/page=\d+/, `page=${targetPage}`);
+                window.location.href = newHref;
+                sendResponse({ success: true, navigating: true });
+                return;
+              }
+            }
+            // Final fallback
+            const url = new URL(window.location.href);
+            url.searchParams.set('page', targetPage);
+            window.location.href = url.toString();
+            sendResponse({ success: true, navigating: true });
           }
-          // Final fallback
-          const url = new URL(window.location.href);
-          url.searchParams.set('page', targetPage);
-          window.location.href = url.toString();
-          sendResponse({ success: true, navigating: true });
+        }
+        else if (request.action === 'EXECUTE_TOPUP_ACTION') {
+          handleExecuteTopupAction(request.step, sendResponse);
+        }
+        else {
+          sendResponse({ success: true, message: 'Đã nhận' });
+        }
+      } catch (e) {
+        sendResponse({ success: false, message: e.message });
+      }
+      return true;
+    });
+  }
+
+  if (isExtensionValid() && chrome.storage?.onChanged) {
+    chrome.storage.onChanged.addListener((changes, area) => {
+      if (!isExtensionValid()) return;
+      if (area === 'local') {
+        if (changes.showWidget !== undefined && widgetElement) {
+          widgetElement.style.display = changes.showWidget.newValue ? 'flex' : 'none';
+        }
+        if (changes.widgetLogs) {
+          liveLogs = changes.widgetLogs.newValue || [];
+          renderLiveLogs();
+        }
+        if (changes.isLoopRunning !== undefined || changes.isLoopPaused !== undefined) {
+          safeStorageGet(['isLoopRunning', 'isLoopPaused']).then(({ isLoopRunning = false, isLoopPaused = false } = {}) => {
+            renderWidgetButtons(isLoopRunning, isLoopPaused);
+          });
         }
       }
-      else if (request.action === 'EXECUTE_TOPUP_ACTION') {
-        handleExecuteTopupAction(request.step, sendResponse);
-      }
-      else {
-        sendResponse({ success: true, message: 'Đã nhận' });
-      }
-    } catch (e) {
-      sendResponse({ success: false, message: e.message });
-    }
-    return true;
-  });
-
-  chrome.storage.onChanged.addListener((changes, area) => {
-    if (area === 'local') {
-      if (changes.showWidget !== undefined && widgetElement) {
-        widgetElement.style.display = changes.showWidget.newValue ? 'flex' : 'none';
-      }
-      if (changes.widgetLogs) {
-        liveLogs = changes.widgetLogs.newValue || [];
-        renderLiveLogs();
-      }
-      if (changes.isLoopRunning !== undefined || changes.isLoopPaused !== undefined) {
-        chrome.storage.local.get(['isLoopRunning', 'isLoopPaused']).then(({ isLoopRunning = false, isLoopPaused = false }) => {
-          renderWidgetButtons(isLoopRunning, isLoopPaused);
-        });
-      }
-    }
-  });
+    });
+  }
 
   if (document.readyState === 'loading') {
     document.addEventListener('DOMContentLoaded', createFloatingWidget);

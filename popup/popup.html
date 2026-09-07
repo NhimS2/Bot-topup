@@ -100,23 +100,42 @@
       <!-- 3. Giờ bắt đầu - Giờ kết thúc -->
       <div class="form-group" style="display: flex; gap: 10px;">
         <div style="flex: 1;">
-          <label for="input-start-time">Giờ bắt đầu chạy:</label>
-          <input type="time" id="input-start-time" class="form-input" value="00:00">
+          <label>Giờ bắt đầu chạy:</label>
+          <div class="time-picker-group">
+            <select id="select-start-hour" class="form-select time-select" title="Giờ bắt đầu"></select>
+            <span class="time-separator">:</span>
+            <select id="select-start-min" class="form-select time-select" title="Phút bắt đầu"></select>
+          </div>
+          <input type="hidden" id="input-start-time" value="00:00">
         </div>
         <div style="flex: 1;">
-          <label for="input-end-time">Giờ tự động tắt:</label>
-          <input type="time" id="input-end-time" class="form-input" value="23:59">
+          <label>Giờ tự động tắt:</label>
+          <div class="time-picker-group">
+            <select id="select-end-hour" class="form-select time-select" title="Giờ kết thúc"></select>
+            <span class="time-separator">:</span>
+            <select id="select-end-min" class="form-select time-select" title="Phút kết thúc"></select>
+          </div>
+          <input type="hidden" id="input-end-time" value="23:59">
         </div>
       </div>
 
       <!-- 4. Ngày bắt đầu lọc -->
       <div class="form-group">
-        <label for="input-from-date">Ngày bắt đầu lọc (From Date):</label>
-        <input type="date" id="input-from-date" class="form-input" value="2026-08-15">
+        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:4px;">
+          <label for="input-from-date" style="margin-bottom:0;">Ngày bắt đầu lọc (From Date):</label>
+          <label class="checkbox-container" style="font-size:11px; margin-bottom:0;" title="Mỗi ngày tự động lấy ngày hôm nay">
+            <input type="checkbox" id="check-auto-today" checked>
+            <span class="check-label" style="font-size:11px; color:var(--primary); font-weight:600;">Luôn lấy hôm nay</span>
+          </label>
+        </div>
+        <div style="display:flex; gap:6px;">
+          <input type="date" id="input-from-date" class="form-input" style="flex:1;">
+          <button type="button" class="btn btn-secondary" id="btn-set-today" style="width:auto; padding:0 10px; margin-top:0; font-size:11px; white-space:nowrap;">Hôm nay</button>
+        </div>
       </div>
 
       <!-- 5. Danh sách SĐT loại trừ -->
-      <div class="form-group" style="margin-bottom: 0;">
+      <div class="form-group">
         <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:4px;">
           <label for="input-phone-entry" style="margin-bottom:0;">Danh sách SĐT loại trừ:</label>
           <span id="blocked-phones-count" style="font-size:11px; color:var(--text-muted); font-weight:600;">(0 số)</span>
@@ -131,6 +150,9 @@
           <div class="blocked-phones-empty">Chưa có số nào trong danh sách chặn</div>
         </div>
       </div>
+
+      <!-- Nút lưu cấu hình -->
+      <button class="btn btn-secondary" id="btn-save-config">Lưu cấu hình</button>
     </div>
 
     <!-- Khung 2: Thông tin máy & Tài khoản -->
@@ -159,15 +181,12 @@
       </div>
 
       <!-- 4. Hiển thị thanh nổi -->
-      <div class="form-group form-check" style="margin-bottom: 12px;">
+      <div class="form-group form-check" style="margin-bottom: 0;">
         <label class="checkbox-container">
           <input type="checkbox" id="check-show-widget" checked>
           <span class="check-label">Hiển thị thanh trạng thái nổi trên web</span>
         </label>
       </div>
-
-      <!-- Nút lưu cấu hình -->
-      <button class="btn btn-secondary" id="btn-save-config">Lưu cấu hình</button>
     </div>
 
     <!-- History / Logs -->

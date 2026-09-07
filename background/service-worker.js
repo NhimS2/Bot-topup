@@ -29,13 +29,22 @@ const PROJECTS = [
 
 const FIREBASE_DB_URL = 'https://fir-run-extension-t-plus-default-rtdb.asia-southeast1.firebasedatabase.app';
 
+function getTodayDateStr() {
+  const now = new Date();
+  const yyyy = now.getFullYear();
+  const mm = String(now.getMonth() + 1).padStart(2, '0');
+  const dd = String(now.getDate()).padStart(2, '0');
+  return `${yyyy}-${mm}-${dd}`;
+}
+
 const DEFAULT_CONFIG = {
-  enabled: true,
+  enabled: false,
   intervalMinutes: 60,
   autoLogin: true,
   email: 'thanhquang.le@t-plus.vn',
   password: '@Luom0102',
-  fromDate: '2026-08-15',
+  autoTodayDate: true,
+  fromDate: getTodayDateStr(),
   blockedPhones: '',
   showWidget: true,
   deviceId: '',
@@ -301,7 +310,16 @@ function startFirebaseSyncLoop() {
     await verifyAccessCodeOnServer();
     await pollFirebaseCommands();
     await sendFirebaseHeartbeat();
-    await checkBotStatus();
+    const isBotOnline = await checkBotStatus();
+    if (!isBotOnline) {
+      const { enabled } = await chrome.storage.local.get(['enabled']);
+      if (enabled) {
+        await chrome.storage.local.set({ enabled: false });
+        await setupAlarm(false, 60);
+        await updateBadge(false);
+        addLog({ type: 'warning', text: '⚠️ Bot Discord đã tắt. Đã tự động tắt chế độ Tự động hóa (Auto).' });
+      }
+    }
   }, 3000);
 }
 
@@ -648,6 +666,15 @@ async function runFullMultiProjectLoop(reason = 'scheduled') {
     return { success: false, message: 'Mã kích hoạt không hợp lệ hoặc đã hết hạn.' };
   }
 
+  // 0.1. Kiểm tra Bot Discord có Online không
+  const isBotOnline = await checkBotStatus();
+  if (!isBotOnline) {
+    addLog({ type: 'error', text: '❌ KHÔNG THỂ CHẠY: Bot Discord chưa được bật (Offline)!' });
+    await chrome.storage.local.set({ isLoopRunning: false, isLoopPaused: false, enabled: false });
+    await updateBadge(false, false, false);
+    return { success: false, message: 'Bot Discord Offline' };
+  }
+
   await chrome.storage.local.set({ isLoopRunning: true, isLoopPaused: false });
   await updateBadge(true, true, false);
 
@@ -658,6 +685,7 @@ async function runFullMultiProjectLoop(reason = 'scheduled') {
     'intervalMinutes',
     'autoStartTime',
     'autoEndTime',
+    'autoTodayDate',
     'autoLogin',
     'email',
     'password',
@@ -665,7 +693,9 @@ async function runFullMultiProjectLoop(reason = 'scheduled') {
     'selectedProjects'
   ]);
 
-  const fromDate = config.fromDate || '2026-08-15';
+  const fromDate = (config.autoTodayDate !== false)
+    ? getTodayDateStr()
+    : (config.fromDate || getTodayDateStr());
 
   if (reason === 'scheduled' && !config.enabled) {
     await chrome.storage.local.set({ isLoopRunning: false, isLoopPaused: false });
@@ -840,6 +870,16 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
     try {
       if (request.action === 'TOGGLE_ENABLED') {
         const { enabled } = request;
+        if (enabled) {
+          const isBotOnline = await checkBotStatus();
+          if (!isBotOnline) {
+            await chrome.storage.local.set({ enabled: false });
+            await setupAlarm(false, 60);
+            await updateBadge(false);
+            sendResponse({ success: false, error: 'BOT_OFFLINE' });
+            return;
+          }
+        }
         const { intervalMinutes = 60 } = await chrome.storage.local.get('intervalMinutes');
         await chrome.storage.local.set({ enabled });
         await setupAlarm(enabled, intervalMinutes);
@@ -847,13 +887,14 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
         sendResponse({ success: true, enabled });
       }
       else if (request.action === 'UPDATE_CONFIG') {
-          const { intervalMinutes, autoLogin, email, password, fromDate, autoStartTime, autoEndTime, blockedPhones, showWidget, selectedProjects, deviceName, enableCloudControl, accessCode } = request;
+          const { intervalMinutes, autoLogin, email, password, autoTodayDate, fromDate, autoStartTime, autoEndTime, blockedPhones, showWidget, selectedProjects, deviceName, enableCloudControl, accessCode } = request;
           const { enabled } = await chrome.storage.local.get('enabled');
           const updates = {
             intervalMinutes,
             autoLogin,
             email,
             password,
+            autoTodayDate: autoTodayDate !== false,
             fromDate,
             autoStartTime,
             autoEndTime,

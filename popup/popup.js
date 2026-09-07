@@ -20,11 +20,25 @@ document.addEventListener('DOMContentLoaded', async () => {
   const inputInterval = document.getElementById('input-interval');
   const inputStartTime = document.getElementById('input-start-time');
   const inputEndTime = document.getElementById('input-end-time');
+  const selectStartHour = document.getElementById('select-start-hour');
+  const selectStartMin = document.getElementById('select-start-min');
+  const selectEndHour = document.getElementById('select-end-hour');
+  const selectEndMin = document.getElementById('select-end-min');
   const presetButtons = document.querySelectorAll('.btn-preset');
   const inputFromDate = document.getElementById('input-from-date');
+  const checkAutoToday = document.getElementById('check-auto-today');
+  const btnSetToday = document.getElementById('btn-set-today');
   const inputDeviceName = document.getElementById('input-device-name');
   const inputEmail = document.getElementById('input-email');
   const inputPassword = document.getElementById('input-password');
+
+  function getTodayDateStr() {
+    const now = new Date();
+    const yyyy = now.getFullYear();
+    const mm = String(now.getMonth() + 1).padStart(2, '0');
+    const dd = String(now.getDate()).padStart(2, '0');
+    return `${yyyy}-${mm}-${dd}`;
+  }
 
   // Phone blacklist elements
   const inputPhoneEntry = document.getElementById('input-phone-entry');
@@ -181,21 +195,49 @@ document.addEventListener('DOMContentLoaded', async () => {
     // Load access code
     if (config.accessCode) {
       inputAccessCode.value = config.accessCode;
+      await checkServerAccessCode(config.accessCode, true);
+    } else {
+      isCodeVerified = false;
+      updateAuthUI(false, 'Chưa nhập mã kích hoạt');
     }
-    await checkServerAccessCode(config.accessCode || '', true);
 
-    toggleEnabled.checked = (config.enabled !== false) && isCodeVerified;
-    updateStatusUI(toggleEnabled.checked, config.isLoopRunning, config.isLoopPaused);
-    updateBotStatusUI(config.isBotOnline);
+    const isBotOnline = await checkRealtimeBotStatus();
+    const isAutoEnabled = !!(config.enabled && isCodeVerified && isBotOnline);
+
+    if (config.enabled && !isAutoEnabled) {
+      await chrome.storage.local.set({ enabled: false });
+      await chrome.runtime.sendMessage({ action: 'TOGGLE_ENABLED', enabled: false });
+    }
+
+    toggleEnabled.checked = isAutoEnabled;
+    updateStatusUI(isAutoEnabled, config.isLoopRunning, config.isLoopPaused);
+    updateBotStatusUI(isBotOnline);
 
     const interval = config.intervalMinutes || 60;
     inputInterval.value = interval;
     updatePresetButtons(interval);
 
-    inputStartTime.value = config.autoStartTime || '00:00';
-    inputEndTime.value = config.autoEndTime || '23:59';
+    initTimeSelects();
+    const startVal = config.autoStartTime || '00:00';
+    const endVal = config.autoEndTime || '23:59';
+    inputStartTime.value = startVal;
+    inputEndTime.value = endVal;
 
-    inputFromDate.value = config.fromDate || '2026-08-15';
+    const [sH = '00', sM = '00'] = startVal.split(':');
+    const [eH = '23', eM = '59'] = endVal.split(':');
+    if (selectStartHour) selectStartHour.value = sH.padStart(2, '0');
+    if (selectStartMin) selectStartMin.value = sM.padStart(2, '0');
+    if (selectEndHour) selectEndHour.value = eH.padStart(2, '0');
+    if (selectEndMin) selectEndMin.value = eM.padStart(2, '0');
+
+    const isAutoToday = config.autoTodayDate !== false;
+    if (checkAutoToday) checkAutoToday.checked = isAutoToday;
+
+    if (isAutoToday) {
+      inputFromDate.value = getTodayDateStr();
+    } else {
+      inputFromDate.value = config.fromDate || getTodayDateStr();
+    }
     if (inputDeviceName) {
       inputDeviceName.value = config.deviceName || (config.email ? config.email.split('@')[0] : 'Máy 1');
     }
@@ -316,15 +358,28 @@ document.addEventListener('DOMContentLoaded', async () => {
     try {
       const controller = new AbortController();
       const timeoutId = setTimeout(() => controller.abort(), 2000);
-      const res = await fetch(`${FIREBASE_DB_URL}/bot_status.json`, { signal: controller.signal }).then(r => r.json()).catch(() => null);
+      const res = await fetch(`${FIREBASE_DB_URL}/bot_status.json?t=${Date.now()}`, { 
+        signal: controller.signal,
+        cache: 'no-store'
+      }).then(r => r.json()).catch(() => null);
       clearTimeout(timeoutId);
 
       const now = Date.now();
-      const isOnline = !!(res && res.online && (now - (res.lastActive || 0) < 10000));
+      const isOnline = !!(res && res.online && (now - (res.lastActive || 0) < 15000));
       updateBotStatusUI(isOnline);
       await chrome.storage.local.set({ isBotOnline: isOnline });
+
+      // Nếu Bot bị tắt thì tự động khóa toggle Auto ngay lập tức
+      if (!isOnline && toggleEnabled.checked) {
+        toggleEnabled.checked = false;
+        await chrome.runtime.sendMessage({ action: 'TOGGLE_ENABLED', enabled: false });
+        const { isLoopRunning = false, isLoopPaused = false } = await chrome.storage.local.get(['isLoopRunning', 'isLoopPaused']);
+        updateStatusUI(false, isLoopRunning, isLoopPaused);
+      }
+      return isOnline;
     } catch (e) {
       updateBotStatusUI(false);
+      return false;
     }
   }
 
@@ -359,6 +414,45 @@ document.addEventListener('DOMContentLoaded', async () => {
         btn.classList.remove('active');
       }
     });
+  }
+
+  let timeSelectsInitialized = false;
+  function initTimeSelects() {
+    if (timeSelectsInitialized) return;
+    timeSelectsInitialized = true;
+
+    const populate = (selectEl, max) => {
+      if (!selectEl) return;
+      selectEl.innerHTML = '';
+      for (let i = 0; i <= max; i++) {
+        const val = String(i).padStart(2, '0');
+        const opt = document.createElement('option');
+        opt.value = val;
+        opt.textContent = val;
+        selectEl.appendChild(opt);
+      }
+    };
+
+    populate(selectStartHour, 23);
+    populate(selectStartMin, 59);
+    populate(selectEndHour, 23);
+    populate(selectEndMin, 59);
+
+    const updateStartHidden = () => {
+      if (inputStartTime && selectStartHour && selectStartMin) {
+        inputStartTime.value = `${selectStartHour.value}:${selectStartMin.value}`;
+      }
+    };
+    const updateEndHidden = () => {
+      if (inputEndTime && selectEndHour && selectEndMin) {
+        inputEndTime.value = `${selectEndHour.value}:${selectEndMin.value}`;
+      }
+    };
+
+    if (selectStartHour) selectStartHour.addEventListener('change', updateStartHidden);
+    if (selectStartMin) selectStartMin.addEventListener('change', updateStartHidden);
+    if (selectEndHour) selectEndHour.addEventListener('change', updateEndHidden);
+    if (selectEndMin) selectEndMin.addEventListener('change', updateEndHidden);
   }
 
   function renderLogs(logs) {
@@ -476,6 +570,17 @@ document.addEventListener('DOMContentLoaded', async () => {
       return;
     }
 
+    if (toggleEnabled.checked) {
+      const isBotOnline = await checkRealtimeBotStatus();
+      if (!isBotOnline) {
+        toggleEnabled.checked = false;
+        alert('⚠️ Bot Discord chưa được bật (Offline)! Vui lòng bật Bot Discord trước khi bật Tự động hóa.');
+        const { isLoopRunning = false, isLoopPaused = false } = await chrome.storage.local.get(['isLoopRunning', 'isLoopPaused']);
+        updateStatusUI(false, isLoopRunning, isLoopPaused);
+        return;
+      }
+    }
+
     const enabled = toggleEnabled.checked;
     const { isLoopRunning = false, isLoopPaused = false } = await chrome.storage.local.get(['isLoopRunning', 'isLoopPaused']);
     updateStatusUI(enabled, isLoopRunning, isLoopPaused);
@@ -501,6 +606,29 @@ document.addEventListener('DOMContentLoaded', async () => {
     updatePresetButtons(inputInterval.value);
   });
 
+  if (btnSetToday) {
+    btnSetToday.addEventListener('click', () => {
+      inputFromDate.value = getTodayDateStr();
+      if (checkAutoToday) checkAutoToday.checked = true;
+    });
+  }
+
+  if (inputFromDate) {
+    inputFromDate.addEventListener('change', () => {
+      if (inputFromDate.value !== getTodayDateStr()) {
+        if (checkAutoToday) checkAutoToday.checked = false;
+      }
+    });
+  }
+
+  if (checkAutoToday) {
+    checkAutoToday.addEventListener('change', () => {
+      if (checkAutoToday.checked) {
+        inputFromDate.value = getTodayDateStr();
+      }
+    });
+  }
+
   if (inputPhoneEntry) {
     inputPhoneEntry.addEventListener('keydown', (e) => {
       if (e.key === 'Enter') {
@@ -523,9 +651,16 @@ document.addEventListener('DOMContentLoaded', async () => {
       inputInterval.value = 60;
     }
 
-    const autoStartTime = inputStartTime.value.trim() || '00:00';
-    const autoEndTime = inputEndTime.value.trim() || '23:59';
-    const fromDate = inputFromDate.value.trim() || '2026-08-15';
+    const autoStartTime = (selectStartHour && selectStartMin)
+      ? `${selectStartHour.value}:${selectStartMin.value}`
+      : (inputStartTime.value.trim() || '00:00');
+    const autoEndTime = (selectEndHour && selectEndMin)
+      ? `${selectEndHour.value}:${selectEndMin.value}`
+      : (inputEndTime.value.trim() || '23:59');
+
+    const autoTodayDate = checkAutoToday ? checkAutoToday.checked : true;
+    const fromDate = autoTodayDate ? getTodayDateStr() : (inputFromDate.value.trim() || getTodayDateStr());
+
     const deviceName = inputDeviceName ? inputDeviceName.value.trim() : '';
     const email = inputEmail.value.trim();
     const password = inputPassword.value.trim();
@@ -543,6 +678,7 @@ document.addEventListener('DOMContentLoaded', async () => {
       intervalMinutes: interval,
       autoStartTime: autoStartTime,
       autoEndTime: autoEndTime,
+      autoTodayDate: autoTodayDate,
       fromDate: fromDate,
       deviceName: deviceName || email,
       email: email,
@@ -569,15 +705,11 @@ document.addEventListener('DOMContentLoaded', async () => {
       isWithinTimeframe = currentMinutes >= startMins || currentMinutes <= endMins;
     }
 
-    // Nếu đang BẬT và nằm TRONG khung giờ thì chạy luôn
-    if (toggleEnabled.checked && isWithinTimeframe) {
-      updateStatusUI(true, true, false);
-      chrome.runtime.sendMessage({ action: 'RUN_NOW' });
-    } else if (!isWithinTimeframe) {
+    if (!isWithinTimeframe && toggleEnabled.checked) {
       if (toggleEnabled.checked) updateStatusUI(true, false, false);
       chrome.runtime.sendMessage({ 
         action: 'ADD_LOG', 
-        entry: { type: 'warning', text: `⏸ Đã lưu. Đang chờ đến khung giờ (${autoStartTime} - ${autoEndTime}) để chạy tự động.` }
+        entry: { type: 'warning', text: `⏸ Đã lưu cấu hình. Đang ngoài khung giờ (${autoStartTime} - ${autoEndTime}). Vòng lặp sẽ chạy khi đến khung giờ.` }
       });
     }
 
@@ -596,6 +728,12 @@ document.addEventListener('DOMContentLoaded', async () => {
     if (!isCodeVerified) {
       inputAccessCode.focus();
       updateAuthUI(false, 'Cần nhập đúng mã kích hoạt để Chạy Vòng Lặp!');
+      return;
+    }
+
+    const isBotOnline = await checkRealtimeBotStatus();
+    if (!isBotOnline) {
+      alert('⚠️ Bot Discord chưa được bật (Offline)! Vui lòng bật Bot Discord trước khi chạy vòng lặp.');
       return;
     }
 
@@ -635,13 +773,15 @@ document.addEventListener('DOMContentLoaded', async () => {
       }
       if (changes.isLoopRunning !== undefined || changes.isLoopPaused !== undefined) {
         chrome.storage.local.get(['enabled', 'isLoopRunning', 'isLoopPaused']).then(({ enabled, isLoopRunning = false, isLoopPaused = false }) => {
-          updateStatusUI(enabled !== false, isLoopRunning, isLoopPaused);
+          updateStatusUI(!!enabled, isLoopRunning, isLoopPaused);
         });
       }
       if (changes.enabled) {
-        toggleEnabled.checked = changes.enabled.newValue && isCodeVerified;
-        chrome.storage.local.get(['isLoopRunning', 'isLoopPaused']).then(({ isLoopRunning, isLoopPaused }) => {
-          updateStatusUI(changes.enabled.newValue, !!isLoopRunning, !!isLoopPaused);
+        const isAuto = !!(changes.enabled.newValue && isCodeVerified);
+        toggleEnabled.checked = isAuto;
+        chrome.storage.local.get(['isLoopRunning', 'isLoopPaused', 'nextRunTime']).then(({ isLoopRunning, isLoopPaused, nextRunTime }) => {
+          updateStatusUI(isAuto, !!isLoopRunning, !!isLoopPaused);
+          startCountdown(isAuto, nextRunTime, !!isLoopRunning, !!isLoopPaused);
         });
       }
       if (changes.showWidget !== undefined) {

@@ -1,13 +1,29 @@
 @echo off
 title Tat TPlus Discord Bot
-color 0c
-echo Dang tim va tat tien trinh Discord Bot chay ngam...
+color 0b
+echo ========================================================
+echo             TAT TPLUS DISCORD BOT
+echo ========================================================
+echo.
+echo [*] Dang kiem tra trang thai Discord Bot...
+echo.
 
-taskkill /f /im python.exe /fi "WINDOWTITLE eq TPlus Remote Discord Controller Bot*" 2>nul
-taskkill /f /im pythonw.exe 2>nul
-wmic process where "commandline like '%%bot.py%%'" call terminate >nul 2>nul
-powershell -Command "Get-CimInstance Win32_Process | Where-Object { $_.CommandLine -like '*bot.py*' } | ForEach-Object { Stop-Process -Id $_.ProcessId -Force }" >nul 2>nul
+powershell -NoProfile -ExecutionPolicy Bypass -Command ^
+  "$targets = @(Get-CimInstance Win32_Process | Where-Object { ($_.CommandLine -like '*bot.py*' -or $_.CommandLine -like '*bot.js*' -or ($_.Name -like 'python*' -and $_.CommandLine -like '*discord-bot*')) -and $_.ProcessId -ne $PID });" ^
+  "if ($targets.Count -gt 0) {" ^
+  "    Write-Host '[*] Phat hien' $targets.Count 'tien trinh Bot dang chay. Dang tien hanh tat...' -ForegroundColor Yellow;" ^
+  "    $targets | ForEach-Object { Stop-Process -Id $_.ProcessId -Force -ErrorAction SilentlyContinue };" ^
+  "    try {" ^
+  "        Invoke-RestMethod -Uri 'https://fir-run-extension-t-plus-default-rtdb.asia-southeast1.firebasedatabase.app/bot_status.json' -Method Put -Body '{\"\"online\"\":false,\"\"lastActive\"\":0}' -ContentType 'application/json' -TimeoutSec 3 -ErrorAction SilentlyContinue | Out-Null;" ^
+  "    } catch {};" ^
+  "    Write-Host '';" ^
+  "    Write-Host '[OK] Da tat toan bo tien trinh Bot thanh cong!' -ForegroundColor Green;" ^
+  "    Write-Host '[OK] Da cap nhat trang thai Offline len he thong.' -ForegroundColor Cyan;" ^
+  "} else {" ^
+  "    Write-Host '[THONG BAO] Bot Discord hien tai KHONG hoat dong (chua duoc bat truoc do)!' -ForegroundColor Yellow;" ^
+  "}"
 
 echo.
-echo [OK] Da tat Bot thanh cong!
-timeout /t 2 >nul
+echo ========================================================
+echo Tu dong dong cua so sau 3 giay...
+ping -n 4 127.0.0.1 >nul

@@ -3,22 +3,21 @@ title TPlus Remote Discord Controller Bot (Python)
 color 0b
 echo ========================================================
 echo     TPLUS REMOTE DISCORD CONTROLLER BOT (PYTHON)
+echo     PHAT TRIEN BOI NhimSs
 echo ========================================================
 cd /d "%~dp0"
 
-:: Kiem tra va cap nhat ma nguon tu dong tu thu muc goc
-echo ========================================================
-echo        KIEM TRA CAP NHAT TPLUS AUTO TOPUP
-echo ========================================================
+:: 1. Kiem tra va cap nhat ma nguon tu dong tu thu muc goc
 cd ..
-powershell -ExecutionPolicy Bypass -File auto_update.ps1
-if %errorlevel% equ 1 (
-    echo [!] Vua moi cap nhat xong. Dang tu dong khoi dong lai...
-    timeout /t 3 /nobreak >nul
-    :: Chay lai chinh no
-    cd discord-bot
-    start "" cmd /c "%~nx0"
-    exit
+if exist "update.ps1" (
+    powershell -ExecutionPolicy Bypass -File update.ps1
+    if %errorlevel% equ 1 (
+        echo [!] Vua moi cap nhat xong. Dang tu dong khoi dong lai...
+        timeout /t 3 /nobreak >nul
+        cd discord-bot
+        start "" cmd /c "%~nx0"
+        exit
+    )
 )
 cd discord-bot
 
@@ -85,7 +84,7 @@ if not defined PYTHON_EXE (
     
     if not defined PYTHON_EXE (
         echo [LOI] Cai dat Python xong nhung chua tim thay file chay.
-        echo Vui long tat bang nay, roi bat lai start_python.bat de ap dung cai dat.
+        echo Vui long tat bang nay, roi bat lai start_bot.bat de ap dung cai dat.
         pause
         exit /b 1
     )
@@ -94,9 +93,9 @@ if not defined PYTHON_EXE (
 echo [OK] Da tim thay Python: %PYTHON_EXE%
 echo.
 
-"%PYTHON_EXE%" -c "import discord, dotenv" >nul 2>&1
+"%PYTHON_EXE%" -c "import discord, dotenv, requests" >nul 2>&1
 if %errorlevel% neq 0 (
-    echo [1/2] Dang cai dat thu vien discord.py, python-dotenv...
+    echo [1/2] Dang cai dat thu vien discord.py, python-dotenv, requests...
     "%PYTHON_EXE%" -m pip install -r requirements.txt
     echo.
 )

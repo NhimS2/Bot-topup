@@ -241,8 +241,8 @@ document.addEventListener('DOMContentLoaded', async () => {
     if (inputDeviceName) {
       inputDeviceName.value = config.deviceName || (config.email ? config.email.split('@')[0] : 'Máy 1');
     }
-    inputEmail.value = config.email || 'thanhquang.le@t-plus.vn';
-    inputPassword.value = config.password || '@Luom0102';
+    inputEmail.value = config.email || '';
+    inputPassword.value = config.password || '';
 
     // Parse blocked phone list
     if (config.blockedPhones) {

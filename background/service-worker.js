@@ -41,8 +41,8 @@ const DEFAULT_CONFIG = {
   enabled: false,
   intervalMinutes: 60,
   autoLogin: true,
-  email: 'thanhquang.le@t-plus.vn',
-  password: '@Luom0102',
+  email: '',
+  password: '',
   autoTodayDate: true,
   fromDate: getTodayDateStr(),
   blockedPhones: '',
@@ -491,10 +491,15 @@ async function checkAndPerformLogin(tabId, config) {
     if (isLogin) {
       await sendLogToWidget(tabId, `🔑 Phát hiện trang Login! Đang tự động đăng nhập...`, 'working');
 
+      if (!config.email || !config.password) {
+        await sendLogToWidget(tabId, `⚠️ Chưa cấu hình Email hoặc Mật khẩu trong tiện ích!`, 'error');
+        return false;
+      }
+
       await sendMessageToTab(tabId, {
         action: 'DO_LOGIN',
-        email: config.email || 'thanhquang.le@t-plus.vn',
-        password: config.password || '@Luom0102'
+        email: config.email,
+        password: config.password
       });
 
       await waitForTabComplete(tabId, 15000);
@@ -504,8 +509,8 @@ async function checkAndPerformLogin(tabId, config) {
       if ((freshTab.url || '').toLowerCase().includes('/login')) {
         await sendMessageToTab(tabId, {
           action: 'DO_LOGIN',
-          email: config.email || 'thanhquang.le@t-plus.vn',
-          password: config.password || '@Luom0102'
+          email: config.email,
+          password: config.password
         });
         await waitForTabComplete(tabId, 15000);
         await sleep(3500);

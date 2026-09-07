@@ -45,29 +45,6 @@
           ⏹ Dừng
         </button>
       </div>
-      <div class="workflow-hint">
-        🔄 <strong>Quy trình tự động:</strong> Đăng nhập ➔ Beer SG (Chỉnh ngày ➔ Proc & Fail) ➔ Beer 333 (Chỉnh ngày ➔
-        Proc & Fail) ➔ Về Home.
-      </div>
-    </div>
-
-    <!-- License & Access Code Card -->
-    <div class="card auth-card" id="auth-card">
-      <div class="auth-header">
-        <div class="auth-title">
-          <span>🔑</span> <strong>Mã Kích Hoạt (Access Code):</strong>
-        </div>
-        <span class="auth-badge" id="auth-badge">Đang kiểm tra...</span>
-      </div>
-      <div class="auth-body">
-        <div style="display: flex; gap: 6px; margin-top: 6px;">
-          <input type="text" id="input-access-code" class="form-input" placeholder="Nhập mã từ Admin để bật Auto..."
-            style="font-family: monospace; font-size: 12px; letter-spacing: 1px; font-weight: 600;">
-          <button type="button" class="btn btn-primary" id="btn-verify-code"
-            style="width: auto; padding: 0 12px; white-space: nowrap; font-size: 11px;">Kích hoạt</button>
-        </div>
-        <div class="auth-msg" id="auth-msg" style="display:none; font-size:11px; margin-top:6px;"></div>
-      </div>
     </div>
 
     <!-- Discord Bot Status & Reminder Card -->
@@ -84,74 +61,13 @@
       </div>
     </div>
 
-    <!-- Configuration Settings -->
+    <!-- Khung 1: Cấu hình hệ thống -->
     <div class="card config-card">
       <div class="card-title">
         <span>⚙️</span> Cấu hình hệ thống
       </div>
 
-      <div class="form-group">
-        <label for="input-interval">Chu kỳ chạy lặp lại:</label>
-        <div class="input-with-presets">
-          <input type="number" id="input-interval" min="1" max="1440" value="60">
-          <div class="preset-buttons">
-            <button class="btn-preset" data-min="5">5p</button>
-            <button class="btn-preset" data-min="15">15p</button>
-            <button class="btn-preset" data-min="30">30p</button>
-            <button class="btn-preset active" data-min="60">60p</button>
-          </div>
-        </div>
-      </div>
-
-      <div class="form-group" style="display: flex; gap: 10px;">
-        <div style="flex: 1;">
-          <label for="input-start-time">Giờ bắt đầu chạy:</label>
-          <input type="time" id="input-start-time" class="form-input" value="00:00">
-        </div>
-        <div style="flex: 1;">
-          <label for="input-end-time">Giờ tự động tắt:</label>
-          <input type="time" id="input-end-time" class="form-input" value="23:59">
-        </div>
-      </div>
-
-      <div class="form-group">
-        <label for="input-from-date">Ngày bắt đầu lọc (From Date):</label>
-        <input type="date" id="input-from-date" class="form-input" value="2026-08-15">
-      </div>
-
-      <div class="form-group">
-        <label for="input-device-name">Tên máy hiển thị trên Discord:</label>
-        <input type="text" id="input-device-name" class="form-input" placeholder="VD: Máy 1 (Nhật), Máy 2 (Tuấn)..."
-          value="Máy 1 (Nhật)">
-      </div>
-
-      <div class="form-group">
-        <label for="input-email">Email đăng nhập:</label>
-        <input type="email" id="input-email" class="form-input" value="thanhquang.le@t-plus.vn">
-      </div>
-
-      <div class="form-group">
-        <label for="input-password">Mật khẩu:</label>
-        <input type="password" id="input-password" class="form-input" value="@Luom0102">
-      </div>
-
-      <div class="form-group">
-        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:4px;">
-          <label for="input-phone-entry" style="margin-bottom:0;">Danh sách SĐT loại trừ:</label>
-          <span id="blocked-phones-count" style="font-size:11px; color:var(--text-muted); font-weight:600;">(0
-            số)</span>
-        </div>
-        <div style="display:flex; gap:6px;">
-          <input type="text" id="input-phone-entry" class="form-input" placeholder="Dán SĐT và nhấn Enter..."
-            style="font-family: monospace; font-size: 12px;">
-          <button type="button" class="btn btn-primary" id="btn-add-phone"
-            style="width: auto; padding: 0 12px; white-space: nowrap; font-size: 11px;">+ Thêm</button>
-        </div>
-        <div id="blocked-phones-tags" class="blocked-phones-tags">
-          <div class="blocked-phones-empty">Chưa có số nào trong danh sách chặn</div>
-        </div>
-      </div>
-
+      <!-- 1. Dự án sẽ chạy -->
       <div class="form-group">
         <label>Dự án sẽ chạy tự động:</label>
         <div
@@ -167,13 +83,90 @@
         </div>
       </div>
 
-      <div class="form-group form-check">
+      <!-- 2. Chu kỳ chạy lặp lại -->
+      <div class="form-group">
+        <label for="input-interval">Chu kỳ chạy lặp lại:</label>
+        <div class="input-with-presets">
+          <input type="number" id="input-interval" min="1" max="1440" value="60">
+          <div class="preset-buttons">
+            <button class="btn-preset" data-min="5">5p</button>
+            <button class="btn-preset" data-min="15">15p</button>
+            <button class="btn-preset" data-min="30">30p</button>
+            <button class="btn-preset active" data-min="60">60p</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- 3. Giờ bắt đầu - Giờ kết thúc -->
+      <div class="form-group" style="display: flex; gap: 10px;">
+        <div style="flex: 1;">
+          <label for="input-start-time">Giờ bắt đầu chạy:</label>
+          <input type="time" id="input-start-time" class="form-input" value="00:00">
+        </div>
+        <div style="flex: 1;">
+          <label for="input-end-time">Giờ tự động tắt:</label>
+          <input type="time" id="input-end-time" class="form-input" value="23:59">
+        </div>
+      </div>
+
+      <!-- 4. Ngày bắt đầu lọc -->
+      <div class="form-group">
+        <label for="input-from-date">Ngày bắt đầu lọc (From Date):</label>
+        <input type="date" id="input-from-date" class="form-input" value="2026-08-15">
+      </div>
+
+      <!-- 5. Danh sách SĐT loại trừ -->
+      <div class="form-group" style="margin-bottom: 0;">
+        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:4px;">
+          <label for="input-phone-entry" style="margin-bottom:0;">Danh sách SĐT loại trừ:</label>
+          <span id="blocked-phones-count" style="font-size:11px; color:var(--text-muted); font-weight:600;">(0 số)</span>
+        </div>
+        <div style="display:flex; gap:6px;">
+          <input type="text" id="input-phone-entry" class="form-input" placeholder="Dán SĐT và nhấn Enter..."
+            style="font-family: monospace; font-size: 12px;">
+          <button type="button" class="btn btn-primary" id="btn-add-phone"
+            style="width: auto; padding: 0 12px; white-space: nowrap; font-size: 11px;">+ Thêm</button>
+        </div>
+        <div id="blocked-phones-tags" class="blocked-phones-tags">
+          <div class="blocked-phones-empty">Chưa có số nào trong danh sách chặn</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Khung 2: Thông tin máy & Tài khoản -->
+    <div class="card config-card">
+      <div class="card-title">
+        <span>🖥️</span> Thông tin máy & Tài khoản
+      </div>
+
+      <!-- 1. Tên máy hiển thị discord -->
+      <div class="form-group">
+        <label for="input-device-name">Tên máy hiển thị trên Discord:</label>
+        <input type="text" id="input-device-name" class="form-input" placeholder="VD: Máy 1 (Nhật), Máy 2 (Tuấn)..."
+          value="Máy 1 (Nhật)">
+      </div>
+
+      <!-- 2. Email đăng nhập -->
+      <div class="form-group">
+        <label for="input-email">Email đăng nhập:</label>
+        <input type="email" id="input-email" class="form-input" value="thanhquang.le@t-plus.vn">
+      </div>
+
+      <!-- 3. Mật khẩu -->
+      <div class="form-group">
+        <label for="input-password">Mật khẩu:</label>
+        <input type="password" id="input-password" class="form-input" value="@Luom0102">
+      </div>
+
+      <!-- 4. Hiển thị thanh nổi -->
+      <div class="form-group form-check" style="margin-bottom: 12px;">
         <label class="checkbox-container">
           <input type="checkbox" id="check-show-widget" checked>
           <span class="check-label">Hiển thị thanh trạng thái nổi trên web</span>
         </label>
       </div>
 
+      <!-- Nút lưu cấu hình -->
       <button class="btn btn-secondary" id="btn-save-config">Lưu cấu hình</button>
     </div>
 
@@ -187,6 +180,25 @@
       </div>
       <div class="logs-container" id="logs-container">
         <div class="log-empty">Chưa có lịch sử hoạt động</div>
+      </div>
+    </div>
+
+    <!-- License & Access Code Card (Đưa xuống dưới cùng) -->
+    <div class="card auth-card" id="auth-card">
+      <div class="auth-header">
+        <div class="auth-title">
+          <span>🔑</span> <strong>Mã Kích Hoạt (Access Code):</strong>
+        </div>
+        <span class="auth-badge" id="auth-badge">Đang kiểm tra...</span>
+      </div>
+      <div class="auth-body">
+        <div style="display: flex; gap: 6px; margin-top: 6px; position: relative;">
+          <input type="password" id="input-access-code" class="form-input" placeholder="Nhập mã kích hoạt..."
+            style="font-family: monospace; font-size: 13px; letter-spacing: 2px; font-weight: 600;" autocomplete="off">
+          <button type="button" class="btn btn-primary" id="btn-verify-code"
+            style="width: auto; padding: 0 12px; white-space: nowrap; font-size: 11px;">Kích hoạt</button>
+        </div>
+        <div class="auth-msg" id="auth-msg" style="display:none; font-size:11px; margin-top:6px;"></div>
       </div>
     </div>
 

@@ -40,6 +40,9 @@ function getTodayDateStr() {
 const DEFAULT_CONFIG = {
   enabled: false,
   intervalMinutes: 60,
+  autoStartTime: '00:00',
+  autoEndTime: '23:59',
+  autoShutdown: false,
   autoLogin: true,
   email: '',
   password: '',
@@ -170,6 +173,8 @@ async function sendFirebaseHeartbeat(stepText = '') {
       'isLoopPaused',
       'fromDate',
       'intervalMinutes',
+      'autoStartTime',
+      'autoEndTime',
       'email',
       'enableCloudControl'
     ]);
@@ -196,7 +201,9 @@ async function sendFirebaseHeartbeat(stepText = '') {
       lastActive: Date.now(),
       lastActiveFormatted: new Date().toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit', second: '2-digit' }),
       fromDate: config.fromDate || '2026-08-15',
-      intervalMinutes: config.intervalMinutes || 60
+      intervalMinutes: config.intervalMinutes || 60,
+      autoStartTime: config.autoStartTime || '00:00',
+      autoEndTime: config.autoEndTime || '23:59'
     };
 
     const controller = new AbortController();
@@ -273,12 +280,15 @@ async function pollFirebaseCommands() {
       const updates = {};
       if (targetCommand.fromDate) updates.fromDate = targetCommand.fromDate;
       if (targetCommand.intervalMinutes) updates.intervalMinutes = parseInt(targetCommand.intervalMinutes, 10);
+      if (targetCommand.autoStartTime) updates.autoStartTime = targetCommand.autoStartTime;
+      if (targetCommand.autoEndTime) updates.autoEndTime = targetCommand.autoEndTime;
+
       await chrome.storage.local.set(updates);
       const { enabled = true, intervalMinutes = 60 } = await chrome.storage.local.get(['enabled', 'intervalMinutes']);
       if (updates.intervalMinutes) {
         await setupAlarm(enabled, intervalMinutes);
       }
-      addLog({ type: 'success', text: `📡 Đã cập nhật cấu hình từ Discord: FromDate=${targetCommand.fromDate || ''}, Interval=${targetCommand.intervalMinutes || ''}p` });
+      addLog({ type: 'success', text: `📡 Đã cập nhật cấu hình từ Discord: FromDate=${targetCommand.fromDate || ''}, Interval=${targetCommand.intervalMinutes || ''}p, Time=${targetCommand.autoStartTime || ''}-${targetCommand.autoEndTime || ''}` });
     }
 
     await sendFirebaseHeartbeat();
@@ -695,7 +705,8 @@ async function runFullMultiProjectLoop(reason = 'scheduled') {
     'email',
     'password',
     'fromDate',
-    'selectedProjects'
+    'selectedProjects',
+    'autoShutdown'
   ]);
 
   const fromDate = (config.autoTodayDate !== false)
@@ -731,6 +742,15 @@ async function runFullMultiProjectLoop(reason = 'scheduled') {
       addLog({ type: 'warning', text: `⏳ Đang ngoài khung giờ chạy tự động (${config.autoStartTime} - ${config.autoEndTime}). Bỏ qua vòng lặp này.` });
       await chrome.storage.local.set({ isLoopRunning: false, isLoopPaused: false });
       await updateBadge(config.enabled, false, false);
+      
+      if (config.autoShutdown) {
+        addLog({ type: 'warning', text: 'Tắt máy tự động được kích hoạt...' });
+        try {
+          await fetch('http://localhost:3000/shutdown', { method: 'POST' });
+        } catch (e) {
+          addLog({ type: 'error', text: 'Không thể gọi Local Server để tắt máy. Đảm bảo Local Server đang chạy.' });
+        }
+      }
       return { success: false, message: 'Ngoài khung giờ tự động.' };
     }
   }

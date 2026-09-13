@@ -11,6 +11,9 @@ const {
   ActionRowBuilder,
   ButtonBuilder,
   ButtonStyle,
+  ModalBuilder,
+  TextInputBuilder,
+  TextInputStyle,
   REST,
   Routes,
   SlashCommandBuilder
@@ -132,7 +135,7 @@ async function fetchDevices() {
           activeData[devId] = dev;
         } else {
           // Tự động xóa node rác trên Firebase
-          fetch(`${FIREBASE_DB_URL}/devices/${devId}.json`, { method: 'DELETE' }).catch(() => {});
+          fetch(`${FIREBASE_DB_URL}/devices/${devId}.json`, { method: 'DELETE' }).catch(() => { });
         }
       }
     }
@@ -197,12 +200,14 @@ async function buildControlPanelPayload() {
     });
 
     onlineDevices.forEach((dev, idx) => {
-      const statusIcon = dev.status === 'running' ? '🟢 ĐANG CHẠY' : (dev.status === 'paused' ? '🟡 ĐANG TẠM DỪNG' : (dev.status === 'disabled' ? '🔴 TỰ ĐỘNG TẮT' : '⚪ SẴN SÀNG'));
+      const statusIcon = dev.status === 'running' ? '🟢 ĐANG CHẠY' : (dev.status === 'paused' ? '🟡 ĐANG TẠM NGƯNG' : '⚪ SẴN SÀNG');
+      const autoStr = dev.enabled !== false ? '🟢 BẬT' : '🔴 TẮT';
       const timeAgo = Math.max(0, Math.floor((now - (dev.lastActive || 0)) / 1000));
-      const fromDate = dev.fromDate || '2026-08-15';
-      embed.addFields({
+        const fromDate = dev.fromDate || '2026-08-15';
+        const timerInfo = `${dev.intervalMinutes || 60}p | ${dev.autoStartTime || '00:00'}-${dev.autoEndTime || '23:59'} | Shutdown: ${dev.autoShutdown ? 'Bật' : 'Tắt'}`;
+        embed.addFields({
         name: `🖥️ [Máy ${idx + 1}]: ${dev.deviceName || dev.deviceId}`,
-        value: `• **Trạng thái:** ${statusIcon}\n• **Tiến độ:** ${dev.currentStep || 'Sẵn sàng'}\n• **From Date:** \`${fromDate}\`\n• **Email:** \`${dev.email || 'N/A'}\`\n• **Phản hồi:** ${timeAgo} giây trước`,
+        value: `• **Trạng thái:** ${statusIcon}\n• **Auto:** ${autoStr}\n• **Tiến độ:** ${dev.currentStep || 'Sẵn sàng'}\n• **From Date:** \`${fromDate}\`\n• **Email:** \`${dev.email || 'N/A'}\`\n• **Hẹn giờ:** \`${timerInfo}\`\n• **Phản hồi:** ${timeAgo} giây trước`,
         inline: false
       });
     });
@@ -215,27 +220,27 @@ async function buildControlPanelPayload() {
   const isAutoEnabled = onlineDevices.length > 0 ? onlineDevices.some(d => d.enabled !== false && d.status !== 'disabled') : true;
 
   // 1. Hàng nút điều khiển TOÀN BỘ MÁY
-  const runBtn = new ButtonBuilder()
-    .setCustomId(anyPaused ? 'btn_global_resume' : (anyRunning ? 'btn_global_pause' : 'btn_global_run'))
-    .setLabel(anyPaused ? '▶ Tiếp Tục Vòng Lặp' : (anyRunning ? '⏸ Tạm Dừng Vòng Lặp' : '⚡ Chạy Toàn Bộ Vòng Lặp Ngay'))
-    .setStyle(anyPaused ? ButtonStyle.Success : (anyRunning ? ButtonStyle.Secondary : ButtonStyle.Primary));
-
   const stopBtn = new ButtonBuilder()
     .setCustomId('btn_global_stop')
-    .setLabel('⏹ Dừng')
+    .setLabel('⏹ Dừng toàn bộ')
     .setStyle(ButtonStyle.Danger);
 
-  const toggleAutoBtn = new ButtonBuilder()
-    .setCustomId('btn_toggle_auto')
-    .setLabel(isAutoEnabled ? '🟢 Auto: ĐANG BẬT' : '🔴 Auto: ĐANG TẮT')
-    .setStyle(isAutoEnabled ? ButtonStyle.Success : ButtonStyle.Danger);
+  const enableAutoBtn = new ButtonBuilder()
+    .setCustomId('btn_global_enable')
+    .setLabel('🟢 Bật Auto')
+    .setStyle(ButtonStyle.Success);
+
+  const disableAutoBtn = new ButtonBuilder()
+    .setCustomId('btn_global_disable')
+    .setLabel('🔴 Tắt Auto')
+    .setStyle(ButtonStyle.Danger);
 
   const refreshBtn = new ButtonBuilder()
     .setCustomId('btn_refresh_panel')
     .setLabel('🔄')
     .setStyle(ButtonStyle.Secondary);
 
-  const globalRow = new ActionRowBuilder().addComponents(runBtn, stopBtn, toggleAutoBtn, refreshBtn);
+  const globalRow = new ActionRowBuilder().addComponents(stopBtn, enableAutoBtn, disableAutoBtn, refreshBtn);
 
   const components = [globalRow];
 
@@ -257,7 +262,15 @@ async function buildControlPanelPayload() {
       new ButtonBuilder()
         .setCustomId(`btn_dev_stop_${dev.deviceId}`)
         .setLabel(`⏹ Dừng [M${idx + 1}]`)
-        .setStyle(ButtonStyle.Danger)
+        .setStyle(ButtonStyle.Danger),
+      new ButtonBuilder()
+        .setCustomId(`btn_dev_timer_${dev.deviceId}`)
+        .setLabel(`🕒 Hẹn Giờ [M${idx + 1}]`)
+        .setStyle(ButtonStyle.Secondary),
+      new ButtonBuilder()
+        .setCustomId(`btn_dev_toggleauto_${dev.deviceId}`)
+        .setLabel(dev.enabled !== false ? `🔴 Tắt Auto [M${idx + 1}]` : `🟢 Bật Auto [M${idx + 1}]`)
+        .setStyle(dev.enabled !== false ? ButtonStyle.Danger : ButtonStyle.Success)
     );
 
     components.push(row);
@@ -341,7 +354,7 @@ client.once('ready', async () => {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ online: true, lastActive: Date.now() })
-    }).catch(() => {});
+    }).catch(() => { });
   };
 
   sendBotHeartbeat();
@@ -486,6 +499,29 @@ client.on('interactionCreate', async (interaction) => {
       return;
     }
 
+    // Xử lý Modal Submit
+    if (interaction.isModalSubmit()) {
+      if (interaction.customId.startsWith('modal_timer_')) {
+        const deviceId = interaction.customId.replace('modal_timer_', '');
+        const intervalMinutes = interaction.fields.getTextInputValue('intervalMinutes');
+        const autoStartTime = interaction.fields.getTextInputValue('autoStartTime');
+        const autoEndTime = interaction.fields.getTextInputValue('autoEndTime');
+        
+        await sendCommandToFirebase(deviceId, 'UPDATE_CONFIG', {
+          intervalMinutes,
+          autoStartTime,
+          autoEndTime
+        });
+        
+        await interaction.reply({
+          content: `✅ Đã gửi cấu hình hẹn giờ tới máy! (Chu kỳ: ${intervalMinutes}p, Khung giờ: ${autoStartTime} - ${autoEndTime})`,
+          ephemeral: true
+        });
+        setTimeout(autoUpdatePanels, 1500);
+        return;
+      }
+    }
+
     // 2. Xử lý Nút bấm (Button Interaction)
     if (interaction.isButton()) {
       const customId = interaction.customId;
@@ -496,13 +532,64 @@ client.on('interactionCreate', async (interaction) => {
         return;
       }
 
-      if (customId === 'btn_toggle_auto') {
-        await sendCommandToFirebase('global', 'TOGGLE_ENABLED');
+      if (customId === 'btn_global_enable') {
+        await sendCommandToFirebase('global', 'ENABLE');
         await interaction.reply({
-          content: `🔁 **LỆNH TẤT CẢ MÁY:** Đã gửi lệnh **BẬT/TẮT TỰ ĐỘNG HÓA** tới toàn bộ máy!`,
+          content: `🟢 **LỆNH TẤT CẢ MÁY:** Đã gửi lệnh **BẬT TỰ ĐỘNG HÓA** tới toàn bộ máy!`,
           ephemeral: true
         });
         setTimeout(autoUpdatePanels, 1500);
+        return;
+      }
+
+      if (customId === 'btn_global_disable') {
+        await sendCommandToFirebase('global', 'DISABLE');
+        await interaction.reply({
+          content: `🔴 **LỆNH TẤT CẢ MÁY:** Đã gửi lệnh **TẮT TỰ ĐỘNG HÓA** tới toàn bộ máy!`,
+          ephemeral: true
+        });
+        setTimeout(autoUpdatePanels, 1500);
+        return;
+      }
+
+      // Xử lý nút Timer (hiện modal)
+      if (customId.startsWith('btn_dev_timer_')) {
+        const deviceId = customId.replace('btn_dev_timer_', '');
+        const devices = await fetchDevices();
+        const dev = devices[deviceId] || {};
+        
+        const modal = new ModalBuilder()
+          .setCustomId(`modal_timer_${deviceId}`)
+          .setTitle(`Cài đặt Hẹn Giờ - ${dev.deviceName || deviceId}`);
+          
+        const intervalInput = new TextInputBuilder()
+          .setCustomId('intervalMinutes')
+          .setLabel("Chu kỳ lặp (phút)")
+          .setValue(String(dev.intervalMinutes || 60))
+          .setStyle(TextInputStyle.Short)
+          .setRequired(true);
+          
+        const startTimeInput = new TextInputBuilder()
+          .setCustomId('autoStartTime')
+          .setLabel("Giờ bắt đầu (HH:mm)")
+          .setValue(dev.autoStartTime || '00:00')
+          .setStyle(TextInputStyle.Short)
+          .setRequired(true);
+          
+        const endTimeInput = new TextInputBuilder()
+          .setCustomId('autoEndTime')
+          .setLabel("Giờ kết thúc (HH:mm)")
+          .setValue(dev.autoEndTime || '23:59')
+          .setStyle(TextInputStyle.Short)
+          .setRequired(true);
+          
+        modal.addComponents(
+          new ActionRowBuilder().addComponents(intervalInput),
+          new ActionRowBuilder().addComponents(startTimeInput),
+          new ActionRowBuilder().addComponents(endTimeInput)
+        );
+        
+        await interaction.showModal(modal);
         return;
       }
 
@@ -552,6 +639,9 @@ client.on('interactionCreate', async (interaction) => {
         } else if (actionType === 'STOP') {
           cmd = 'STOP';
           actionName = 'DỪNG HẲN';
+        } else if (actionType === 'TOGGLEAUTO') {
+          cmd = 'TOGGLE_ENABLED';
+          actionName = 'BẬT/TẮT AUTO';
         }
 
         await sendCommandToFirebase(deviceId, cmd);
@@ -571,7 +661,7 @@ client.on('interactionCreate', async (interaction) => {
   } catch (err) {
     console.error('Lỗi interactionCreate:', err);
     if (!interaction.replied && !interaction.deferred) {
-      await interaction.reply({ content: `⚠️ Lỗi xử lý: ${err.message}`, ephemeral: true }).catch(() => {});
+      await interaction.reply({ content: `⚠️ Lỗi xử lý: ${err.message}`, ephemeral: true }).catch(() => { });
     }
   }
 });

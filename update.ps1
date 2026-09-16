@@ -1,4 +1,6 @@
 # TPlus Auto Topup - Auto Update Script
+[Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
+
 $REPO_OWNER = "NhimS2"
 $REPO_NAME = "Bot-topup"
 $BRANCH = "master"
@@ -18,7 +20,8 @@ Write-Host "========================================================" -Foregroun
 Write-Host "[*] Phien ban hien tai tren may: v$localVersion"
 
 try {
-    $remoteVersion = (Invoke-RestMethod -Uri "$VERSION_URL?t=$([DateTimeOffset]::UtcNow.ToUnixTimeSeconds())" -TimeoutSec 5).Trim()
+    Write-Host "URL: ${VERSION_URL}?t=$([DateTimeOffset]::UtcNow.ToUnixTimeSeconds())"
+    $remoteVersion = (Invoke-RestMethod -Uri "${VERSION_URL}?t=$([DateTimeOffset]::UtcNow.ToUnixTimeSeconds())" -TimeoutSec 5).Trim()
     Write-Host "[*] Phien ban moi nhat tren server: v$remoteVersion"
     
     if ($remoteVersion -and ($remoteVersion -ne $localVersion)) {
@@ -62,5 +65,6 @@ try {
     }
 } catch {
     Write-Host "[!] Khong the ket noi toi server cap nhat (Tiep tuc dung ban hien tai)." -ForegroundColor Gray
+    Write-Host "Chi tiet loi: $($_.Exception.Message)" -ForegroundColor Red
     exit 0
 }

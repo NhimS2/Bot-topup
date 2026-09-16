@@ -27,6 +27,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   const presetButtons = document.querySelectorAll('.btn-preset');
   const inputFromDate = document.getElementById('input-from-date');
   const checkAutoToday = document.getElementById('check-auto-today');
+  const checkAutoShutdown = document.getElementById('check-auto-shutdown');
   const btnSetToday = document.getElementById('btn-set-today');
   const inputDeviceName = document.getElementById('input-device-name');
   const inputEmail = document.getElementById('input-email');
@@ -176,6 +177,7 @@ document.addEventListener('DOMContentLoaded', async () => {
       'intervalMinutes',
       'autoStartTime',
       'autoEndTime',
+      'autoShutdown',
       'fromDate',
       'deviceName',
       'email',
@@ -229,6 +231,8 @@ document.addEventListener('DOMContentLoaded', async () => {
     if (selectStartMin) selectStartMin.value = sM.padStart(2, '0');
     if (selectEndHour) selectEndHour.value = eH.padStart(2, '0');
     if (selectEndMin) selectEndMin.value = eM.padStart(2, '0');
+
+    if (checkAutoShutdown) checkAutoShutdown.checked = !!config.autoShutdown;
 
     const isAutoToday = config.autoTodayDate !== false;
     if (checkAutoToday) checkAutoToday.checked = isAutoToday;
@@ -673,11 +677,14 @@ document.addEventListener('DOMContentLoaded', async () => {
     btnSaveConfig.textContent = 'Đang lưu...';
     btnSaveConfig.disabled = true;
 
+    const autoShutdown = checkAutoShutdown ? checkAutoShutdown.checked : false;
+
     await chrome.runtime.sendMessage({
       action: 'UPDATE_CONFIG',
       intervalMinutes: interval,
       autoStartTime: autoStartTime,
       autoEndTime: autoEndTime,
+      autoShutdown: autoShutdown,
       autoTodayDate: autoTodayDate,
       fromDate: fromDate,
       deviceName: deviceName || email,
@@ -770,6 +777,32 @@ document.addEventListener('DOMContentLoaded', async () => {
     if (area === 'local') {
       if (changes.logs) {
         renderLogs(changes.logs.newValue || []);
+      }
+      if (changes.intervalMinutes) {
+        const interval = changes.intervalMinutes.newValue;
+        if (interval) {
+          inputInterval.value = interval;
+          updatePresetButtons(interval);
+        }
+      }
+      if (changes.autoStartTime || changes.autoEndTime || changes.autoShutdown) {
+        chrome.storage.local.get(['autoStartTime', 'autoEndTime', 'autoShutdown']).then((res) => {
+          if (res.autoStartTime) {
+            inputStartTime.value = res.autoStartTime;
+            const [sH = '00', sM = '00'] = res.autoStartTime.split(':');
+            if (selectStartHour) selectStartHour.value = sH;
+            if (selectStartMin) selectStartMin.value = sM;
+          }
+          if (res.autoEndTime) {
+            inputEndTime.value = res.autoEndTime;
+            const [eH = '23', eM = '59'] = res.autoEndTime.split(':');
+            if (selectEndHour) selectEndHour.value = eH;
+            if (selectEndMin) selectEndMin.value = eM;
+          }
+          if (res.autoShutdown !== undefined) {
+            if (checkAutoShutdown) checkAutoShutdown.checked = !!res.autoShutdown;
+          }
+        });
       }
       if (changes.isLoopRunning !== undefined || changes.isLoopPaused !== undefined) {
         chrome.storage.local.get(['enabled', 'isLoopRunning', 'isLoopPaused']).then(({ enabled, isLoopRunning = false, isLoopPaused = false }) => {

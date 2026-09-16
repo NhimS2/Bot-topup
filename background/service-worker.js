@@ -99,14 +99,29 @@ const sleep = async (ms) => {
   }
 };
 
-const _wh1 = "1428196372506607678/8rvJQFih4eFnxHvBIgx-HRpWg5LYfJwW2HdoPltNTx_z-hKl5xiykt6HGlXjcnGw84Jw";
-const _wh2 = "1540775585184354427/fZED8wVYFK76uzXVGorNqDAVHtSznyVwlRZgrlGSEKgOtNLNZKoACJ6yVZd1o42Bx1yt";
-const DISCORD_WEBHOOK_URL = `https://discordapp.com/api/webhooks/${_wh1}`;
-const DISCORD_WEBHOOK_URGENT_URL = `https://discordapp.com/api/webhooks/${_wh2}`;
+let DISCORD_WEBHOOK_URL = '';
+let DISCORD_WEBHOOK_URGENT_URL = '';
+
+async function fetchWebhooks() {
+  try {
+    const res = await fetch(`${FIREBASE_DB_URL}/config/webhooks.json`);
+    const data = await res.json();
+    if (data) {
+      DISCORD_WEBHOOK_URL = data.webhook_url || '';
+      DISCORD_WEBHOOK_URGENT_URL = data.webhook_urgent_url || '';
+    }
+  } catch (e) {
+    console.error("Failed to fetch webhooks:", e);
+  }
+}
+fetchWebhooks();
 
 async function sendDiscordWebhook(tabId, projectName, tabName, recordsCount) {
   try {
     if (recordsCount <= 0) return; // Chỉ gửi thông báo khi có bản ghi (Displaying...)
+
+    if (!DISCORD_WEBHOOK_URL) await fetchWebhooks();
+    if (!DISCORD_WEBHOOK_URL) return; // Silent fail if still unavailable
 
     // Tạo timeout 10 giây để tránh trường hợp fetch bị treo vĩnh viễn
     const controller = new AbortController();

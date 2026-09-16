@@ -213,10 +213,13 @@ class TimerModal(discord.ui.Modal, title="Cấu hình Hẹn Giờ"):
         required=True
     )
 
-    def __init__(self, dev_id, machine_name):
+    def __init__(self, dev_id, machine_name, current_interval, current_start, current_end):
         super().__init__()
         self.dev_id = dev_id
         self.machine_name = machine_name
+        self.interval.default = str(current_interval)
+        self.start_time.default = current_start
+        self.end_time.default = current_end
 
     async def on_submit(self, interaction: discord.Interaction):
         await interaction.response.defer(ephemeral=True)
@@ -267,26 +270,36 @@ class ControlPanelView(discord.ui.View):
 
             btn_dev_stop = discord.ui.Button(label=f"⏹ Dừng [M{idx+1}]", style=discord.ButtonStyle.danger, row=row_num)
             btn_dev_timer = discord.ui.Button(label=f"🕒 Hẹn Giờ [M{idx+1}]", style=discord.ButtonStyle.secondary, row=row_num)
-            btn_dev_enable = discord.ui.Button(label=f"🟢 Bật Auto [M{idx+1}]", style=discord.ButtonStyle.success, row=row_num)
+            
+            if dev_enabled:
+                btn_dev_toggle_auto = discord.ui.Button(label=f"🔴 Tắt Auto [M{idx+1}]", style=discord.ButtonStyle.danger, row=row_num)
+                btn_dev_toggle_auto.callback = self.make_device_callback(dev_id, "DISABLE", f"TẮT AUTO [M{idx+1}]", {"enabled": False})
+            else:
+                btn_dev_toggle_auto = discord.ui.Button(label=f"🟢 Bật Auto [M{idx+1}]", style=discord.ButtonStyle.success, row=row_num)
+                btn_dev_toggle_auto.callback = self.make_device_callback(dev_id, "ENABLE", f"BẬT AUTO [M{idx+1}]", {"enabled": True})
+
             btn_dev_shutdown = discord.ui.Button(label=f"🔌 Shutdown [M{idx+1}]", style=discord.ButtonStyle.danger, row=row_num)
             btn_dev_showlog = discord.ui.Button(label=f"📄 Show Log [M{idx+1}]", style=discord.ButtonStyle.secondary, row=row_num)
 
             btn_dev_stop.callback = self.make_device_callback(dev_id, "STOP", f"DỪNG [M{idx+1}]")
-            btn_dev_timer.callback = self.make_timer_callback(dev_id, f"[M{idx+1}]")
-            btn_dev_enable.callback = self.make_device_callback(dev_id, "ENABLE", f"BẬT AUTO [M{idx+1}]", {"enabled": True})
+            
+            current_interval = dev.get("intervalMinutes", 60)
+            current_start = dev.get("autoStartTime", "00:00")
+            current_end = dev.get("autoEndTime", "23:59")
+            btn_dev_timer.callback = self.make_timer_callback(dev_id, f"[M{idx+1}]", current_interval, current_start, current_end)
             btn_dev_shutdown.callback = self.make_device_callback(dev_id, "SHUTDOWN", f"SHUTDOWN [M{idx+1}]")
             btn_dev_showlog.callback = self.make_showlog_callback(dev_id, f"[M{idx+1}]")
 
             self.add_item(btn_dev_stop)
             self.add_item(btn_dev_timer)
-            self.add_item(btn_dev_enable)
+            self.add_item(btn_dev_toggle_auto)
             self.add_item(btn_dev_shutdown)
             self.add_item(btn_dev_showlog)
 
 
-    def make_timer_callback(self, dev_id, machine_name):
+    def make_timer_callback(self, dev_id, machine_name, current_interval, current_start, current_end):
         async def callback(interaction: discord.Interaction):
-            modal = TimerModal(dev_id, machine_name)
+            modal = TimerModal(dev_id, machine_name, current_interval, current_start, current_end)
             await interaction.response.send_modal(modal)
         return callback
 

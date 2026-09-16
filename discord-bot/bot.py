@@ -268,18 +268,18 @@ class ControlPanelView(discord.ui.View):
             dev_id = dev.get("deviceId", f"dev_{idx}")
             dev_enabled = dev.get("enabled", True)
 
-            btn_dev_stop = discord.ui.Button(label=f"⏹ Dừng [M{idx+1}]", style=discord.ButtonStyle.danger, row=row_num)
-            btn_dev_timer = discord.ui.Button(label=f"🕒 Hẹn Giờ [M{idx+1}]", style=discord.ButtonStyle.secondary, row=row_num)
+            btn_dev_stop = discord.ui.Button(label=f"⏹ Dừng [M{idx+1}]", style=discord.ButtonStyle.danger, custom_id=f"btn_stop_{dev_id}", row=row_num)
+            btn_dev_timer = discord.ui.Button(label=f"🕒 Hẹn Giờ [M{idx+1}]", style=discord.ButtonStyle.secondary, custom_id=f"btn_timer_{dev_id}", row=row_num)
             
             if dev_enabled:
-                btn_dev_toggle_auto = discord.ui.Button(label=f"🔴 Tắt Auto [M{idx+1}]", style=discord.ButtonStyle.danger, row=row_num)
+                btn_dev_toggle_auto = discord.ui.Button(label=f"🔴 Tắt Auto [M{idx+1}]", style=discord.ButtonStyle.danger, custom_id=f"btn_auto_{dev_id}", row=row_num)
                 btn_dev_toggle_auto.callback = self.make_device_callback(dev_id, "DISABLE", f"TẮT AUTO [M{idx+1}]", {"enabled": False})
             else:
-                btn_dev_toggle_auto = discord.ui.Button(label=f"🟢 Bật Auto [M{idx+1}]", style=discord.ButtonStyle.success, row=row_num)
+                btn_dev_toggle_auto = discord.ui.Button(label=f"🟢 Bật Auto [M{idx+1}]", style=discord.ButtonStyle.success, custom_id=f"btn_auto_{dev_id}", row=row_num)
                 btn_dev_toggle_auto.callback = self.make_device_callback(dev_id, "ENABLE", f"BẬT AUTO [M{idx+1}]", {"enabled": True})
 
-            btn_dev_shutdown = discord.ui.Button(label=f"🔌 Shutdown [M{idx+1}]", style=discord.ButtonStyle.danger, row=row_num)
-            btn_dev_showlog = discord.ui.Button(label=f"📄 Show Log [M{idx+1}]", style=discord.ButtonStyle.secondary, row=row_num)
+            btn_dev_shutdown = discord.ui.Button(label=f"🔌 Shutdown [M{idx+1}]", style=discord.ButtonStyle.danger, custom_id=f"btn_shutdown_{dev_id}", row=row_num)
+            btn_dev_showlog = discord.ui.Button(label=f"📄 Show Log [M{idx+1}]", style=discord.ButtonStyle.secondary, custom_id=f"btn_log_{dev_id}", row=row_num)
 
             btn_dev_stop.callback = self.make_device_callback(dev_id, "STOP", f"DỪNG [M{idx+1}]")
             

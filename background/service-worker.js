@@ -68,7 +68,7 @@ const DEFAULT_CONFIG = {
 let isLoopCancelled = false;
 let isLoopPaused = false;
 let pauseResolver = null;
-let lastProcessedCommandTime = 0;
+let lastProcessedCommandTime = Date.now();
 let currentRunningStep = 'Sẵn sàng';
 
 async function checkPauseAndCancel() {
@@ -765,8 +765,9 @@ async function runFullMultiProjectLoop(reason = 'scheduled') {
       await chrome.storage.local.set({ isLoopRunning: false, isLoopPaused: false });
       await updateBadge(config.enabled, false, false);
       
-      if (config.autoShutdown) {
-        addLog({ type: 'warning', text: 'Tắt máy tự động được kích hoạt...' });
+      const minsAfterEnd = (currentMinutes - endMins + 1440) % 1440;
+      if (config.autoShutdown && minsAfterEnd > 0 && minsAfterEnd <= 30) {
+        addLog({ type: 'warning', text: 'Tắt máy tự động được kích hoạt do vừa kết thúc khung giờ...' });
         try {
           await fetch('http://localhost:3000/shutdown', { method: 'POST' });
         } catch (e) {

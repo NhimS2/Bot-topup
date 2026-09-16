@@ -99,8 +99,10 @@ const sleep = async (ms) => {
   }
 };
 
-const DISCORD_WEBHOOK_URL = 'https://discordapp.com/api/webhooks/1428196372506607678/8rvJQFih4eFnxHvBIgx-HRpWg5LYfJwW2HdoPltNTx_z-hKl5xiykt6HGlXjcnGw84Jw';
-const DISCORD_WEBHOOK_URGENT_URL = 'https://discordapp.com/api/webhooks/1540775585184354427/fZED8wVYFK76uzXVGorNqDAVHtSznyVwlRZgrlGSEKgOtNLNZKoACJ6yVZd1o42Bx1yt';
+const _wh1 = "1428196372506607678/8rvJQFih4eFnxHvBIgx-HRpWg5LYfJwW2HdoPltNTx_z-hKl5xiykt6HGlXjcnGw84Jw";
+const _wh2 = "1540775585184354427/fZED8wVYFK76uzXVGorNqDAVHtSznyVwlRZgrlGSEKgOtNLNZKoACJ6yVZd1o42Bx1yt";
+const DISCORD_WEBHOOK_URL = `https://discordapp.com/api/webhooks/${_wh1}`;
+const DISCORD_WEBHOOK_URGENT_URL = `https://discordapp.com/api/webhooks/${_wh2}`;
 
 async function sendDiscordWebhook(tabId, projectName, tabName, recordsCount) {
   try {

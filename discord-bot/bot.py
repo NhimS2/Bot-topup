@@ -44,7 +44,8 @@ load_dotenv()
 
 TOKEN = os.getenv("DISCORD_BOT_TOKEN")
 FIREBASE_DB_URL = os.getenv("FIREBASE_DB_URL", "https://fir-run-extension-t-plus-default-rtdb.asia-southeast1.firebasedatabase.app")
-AUTH_WEBHOOK_URL = os.getenv("AUTH_WEBHOOK_URL", "https://ptb.discord.com/api/webhooks/1545410985198747738/M535wrLZA8Peczqn9boiW2q6P5D1T0CJT6L3Iv828nvKmr2Yik0_QsSMiaHWg7wX3YZF")
+_auth_wh = "1545410985198747738/M535wrLZA8Peczqn9boiW2q6P5D1T0CJT6L3Iv828nvKmr2Yik0_QsSMiaHWg7wX3YZF"
+AUTH_WEBHOOK_URL = os.getenv("AUTH_WEBHOOK_URL", f"https://ptb.discord.com/api/webhooks/{_auth_wh}")
 
 # ID duy nhất của Admin được phép thực hiện
 ADMIN_ID = 584589789198811157

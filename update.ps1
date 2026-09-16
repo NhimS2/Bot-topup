@@ -25,7 +25,10 @@ try {
     Write-Host "[*] Phien ban moi nhat tren server: v$remoteVersion"
     
     if ($remoteVersion -and ($remoteVersion -ne $localVersion)) {
-        Write-Host "[!] Phat hien phien ban moi (v$remoteVersion)! Dang tien hanh cap nhat..." -ForegroundColor Yellow
+        $vRemote = [version]$remoteVersion
+        $vLocal = [version]$localVersion
+        if ($vRemote -gt $vLocal) {
+            Write-Host "[!] Phat hien phien ban moi (v$remoteVersion)! Dang tien hanh cap nhat..." -ForegroundColor Yellow
         
         $tempZip = Join-Path $env:TEMP "tplus_update.zip"
         $tempExtract = Join-Path $env:TEMP "tplus_extract"
@@ -58,6 +61,7 @@ try {
             
             Write-Host "[OK] Da cap nhat len phien ban v$remoteVersion thanh cong!" -ForegroundColor Green
             exit 1
+        }
         }
     } else {
         Write-Host "[OK] Ban dang su dung phien ban moi nhat." -ForegroundColor Green

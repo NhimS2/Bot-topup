@@ -1,0 +1,15 @@
+252:       addLog({ type: 'warning', text: `📡 Nhận lệnh TẠM DỪNG từ Discord!` });
+255:       addLog({ type: 'info', text: `📡 Nhận lệnh TIẾP TỤC từ Discord!` });
+258:       addLog({ type: 'error', text: `📡 Nhận lệnh DỪNG HẲN từ Discord!` });
+261:       addLog({ type: 'success', text: `📡 Nhận lệnh CHẠY TẤT CẢ từ Discord!` });
+278:       addLog({ type: 'info', text: `📡 Đã ${newEnabled ? 'BẬT' : 'TẮT'} tự động hóa theo lệnh Discord!` });
+291:       addLog({ type: 'success', text: `📡 Đã cập nhật cấu hình từ Discord: FromDate=${targetCommand.fromDate || ''}, Interval=${targetCommand.intervalMinutes || ''}p, Time=${targetCommand.autoStartTime || ''}-${targetCommand.autoEndTime || ''}` });
+320:       addLog({ type: 'error', text: `📡 Nhận lệnh TẮT MÁY (Shutdown) từ Discord!` });
+364:         addLog({ type: 'warning', text: '⚠️ Bot Discord đã tắt. Đã tự động tắt chế độ Tự động hóa (Auto).' });
+692:         addLog({
+721:     addLog({ type: 'error', text: '❌ KHÔNG THỂ CHẠY: Bot Discord chưa được bật (Offline)!' });
+776:       addLog({ type: 'warning', text: `⏳ Đang ngoài khung giờ chạy tự động (${config.autoStartTime} - ${config.autoEndTime}). Bỏ qua vòng lặp này.` });
+781:         addLog({ type: 'warning', text: 'Tắt máy tự động được kích hoạt...' });
+785:           addLog({ type: 'error', text: 'Không thể gọi Local Server để tắt máy. Đảm bảo Local Server đang chạy.' });
+838:       await addLog({
+871:     await addLog({

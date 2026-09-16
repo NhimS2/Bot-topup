@@ -210,7 +210,7 @@ async function sendFirebaseHeartbeat(stepText = '') {
     const timeoutId = setTimeout(() => controller.abort(), 4000);
 
     await fetch(`${FIREBASE_DB_URL}/devices/${deviceId}.json`, {
-      method: 'PUT',
+      method: 'PATCH',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(payload),
       signal: controller.signal
@@ -276,6 +276,28 @@ async function pollFirebaseCommands() {
       await updateBadge(newEnabled);
       await setupAlarm(newEnabled, intervalMinutes);
       addLog({ type: 'info', text: `📡 Đã ${newEnabled ? 'BẬT' : 'TẮT'} tự động hóa theo lệnh Discord!` });
+    } else if (action === 'REQUEST_LOGS') {
+      addLog({ type: 'info', text: `📡 Nhận lệnh XEM LOG từ Discord!` });
+      try {
+        const { widgetLogs = [] } = await chrome.storage.local.get(['widgetLogs']);
+        let formattedLogs = widgetLogs.map(log => `[${log.time}] ${log.text}`);
+        if (formattedLogs.length === 0) formattedLogs = ["Không có log nào gần đây."];
+        
+        await fetch(`${FIREBASE_DB_URL}/discordLogs.json`, {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ [deviceId]: formattedLogs })
+        });
+      } catch (err) {
+        console.error("Lỗi khi gửi log:", err);
+      }
+    } else if (action === 'SHUTDOWN') {
+      addLog({ type: 'error', text: `📡 Nhận lệnh SHUTDOWN từ Discord! Đang tắt máy...` });
+      try {
+        await fetch('http://localhost:3000/shutdown', { method: 'POST' });
+      } catch (err) {
+        console.error("Lỗi gọi shutdown server nội bộ:", err);
+      }
     } else if (action === 'UPDATE_CONFIG') {
       const updates = {};
       if (targetCommand.fromDate) updates.fromDate = targetCommand.fromDate;

@@ -4,6 +4,35 @@ import time
 import json
 import asyncio
 import urllib.request
+import threading
+import http.server
+import socketserver
+
+class MyHttpRequestHandler(http.server.SimpleHTTPRequestHandler):
+    def do_POST(self):
+        if self.path == '/shutdown':
+            self.send_response(200)
+            self.end_headers()
+            self.wfile.write(b'Shutting down...')
+            print('[!] Shutdown command received from Chrome Extension. Shutting down PC...')
+            os.system('shutdown /s /t 0')
+        else:
+            self.send_response(404)
+            self.end_headers()
+
+def run_local_server():
+    PORT = 3000
+    try:
+        handler = MyHttpRequestHandler
+        with socketserver.TCPServer(('', PORT), handler) as httpd:
+            print(f'[*] Python Local Shutdown Server running on port {PORT}')
+            httpd.serve_forever()
+    except Exception as e:
+        print(f'[!] Local server error: {e}')
+
+# Start the local server in a background thread
+threading.Thread(target=run_local_server, daemon=True).start()
+
 import discord
 from discord.ext import commands, tasks
 from dotenv import load_dotenv
@@ -167,71 +196,121 @@ def send_command(target_id, action, extra_data=None):
 # ==========================================
 # VIEW BẢNG ĐIỀU KHIỂN ĐẦY ĐỦ NÚT BẤM (GỌN GÀNG)
 # ==========================================
+class TimerModal(discord.ui.Modal, title="Cấu hình Hẹn Giờ"):
+    interval = discord.ui.TextInput(
+        label="Khoảng cách lặp (phút)",
+        default="60",
+        required=True
+    )
+    start_time = discord.ui.TextInput(
+        label="Giờ bắt đầu (HH:MM)",
+        default="00:00",
+        required=True
+    )
+    end_time = discord.ui.TextInput(
+        label="Giờ kết thúc (HH:MM)",
+        default="23:59",
+        required=True
+    )
+
+    def __init__(self, dev_id, machine_name):
+        super().__init__()
+        self.dev_id = dev_id
+        self.machine_name = machine_name
+
+    async def on_submit(self, interaction: discord.Interaction):
+        await interaction.response.defer(ephemeral=True)
+        extra_data = {
+            "intervalMinutes": int(self.interval.value),
+            "autoStartTime": self.start_time.value,
+            "autoEndTime": self.end_time.value
+        }
+        await asyncio.to_thread(send_command, self.dev_id, "UPDATE_CONFIG", extra_data)
+        await interaction.followup.send(f"🕒 Đã gửi cấu hình hẹn giờ tới {self.machine_name}!", ephemeral=True)
+        
+        await asyncio.sleep(0.5)
+        devices = await asyncio.to_thread(fetch_devices)
+        embed, view = build_panel(devices)
+        try:
+            await interaction.message.edit(embed=embed, view=view)
+        except Exception:
+            pass
+
 class ControlPanelView(discord.ui.View):
     def __init__(self, devices_data):
         super().__init__(timeout=None)
         online_devices = list(devices_data.values())
 
-        any_running = any(d.get("status") == "running" for d in online_devices)
-        any_paused = any(d.get("status") == "paused" for d in online_devices)
-        is_auto_enabled = any(d.get("enabled", True) and d.get("status") != "disabled" for d in online_devices) if online_devices else True
+        # 1. HÀNG 1: ĐIỀU KHIỂN CHUNG
+        btn_stop = discord.ui.Button(label="⏹ Dừng toàn bộ", style=discord.ButtonStyle.danger, custom_id="btn_global_stop", row=0)
+        btn_stop.callback = self.make_global_callback("STOP", "DỪNG HẲN TOÀN BỘ")
 
-        # 1. HÀNG 1: ĐIỀU KHIỂN VÒNG LẶP TOÀN BỘ
-        if any_paused:
-            btn_run = discord.ui.Button(label="▶ Tiếp Tục Vòng Lặp", style=discord.ButtonStyle.success, custom_id="btn_global_resume", row=0)
-            btn_run.callback = self.make_global_callback("RESUME", "TIẾP TỤC VÒNG LẶP")
-        elif any_running:
-            btn_run = discord.ui.Button(label="⏸ Tạm Dừng Vòng Lặp", style=discord.ButtonStyle.secondary, custom_id="btn_global_pause", row=0)
-            btn_run.callback = self.make_global_callback("PAUSE", "TẠM DỪNG VÒNG LẶP")
-        else:
-            btn_run = discord.ui.Button(label="⚡ Chạy Toàn Bộ Vòng Lặp Ngay", style=discord.ButtonStyle.primary, custom_id="btn_global_run", row=0)
-            btn_run.callback = self.make_global_callback("RUN_NOW", "CHẠY TOÀN BỘ VÒNG LẶP")
+        btn_enable_auto = discord.ui.Button(label="🟢 Bật Auto", style=discord.ButtonStyle.success, custom_id="btn_global_enable", row=0)
+        btn_enable_auto.callback = self.make_global_callback("ENABLE", "BẬT TỰ ĐỘNG HÓA", {"enabled": True})
 
-        btn_stop = discord.ui.Button(label="⏹ Dừng", style=discord.ButtonStyle.danger, custom_id="btn_global_stop", row=0)
-        btn_stop.callback = self.make_global_callback("STOP", "DỪNG HẲN")
-
-        if is_auto_enabled:
-            btn_toggle_auto = discord.ui.Button(label="🟢 Auto: ĐANG BẬT", style=discord.ButtonStyle.success, custom_id="btn_toggle_auto", row=0)
-            btn_toggle_auto.callback = self.make_global_callback("DISABLE", "TẮT TỰ ĐỘNG HÓA", {"enabled": False})
-        else:
-            btn_toggle_auto = discord.ui.Button(label="🔴 Auto: ĐANG TẮT", style=discord.ButtonStyle.danger, custom_id="btn_toggle_auto", row=0)
-            btn_toggle_auto.callback = self.make_global_callback("ENABLE", "BẬT TỰ ĐỘNG HÓA", {"enabled": True})
+        btn_disable_auto = discord.ui.Button(label="🔴 Tắt Auto", style=discord.ButtonStyle.danger, custom_id="btn_global_disable", row=0)
+        btn_disable_auto.callback = self.make_global_callback("DISABLE", "TẮT TỰ ĐỘNG HÓA", {"enabled": False})
 
         btn_refresh = discord.ui.Button(label="🔄", style=discord.ButtonStyle.secondary, custom_id="btn_refresh", row=0)
         btn_refresh.callback = self.refresh_callback
 
-        self.add_item(btn_run)
         self.add_item(btn_stop)
-        self.add_item(btn_toggle_auto)
+        self.add_item(btn_enable_auto)
+        self.add_item(btn_disable_auto)
         self.add_item(btn_refresh)
 
         # 2. HÀNG 2+: NÚT ĐIỀU KHIỂN RIÊNG TỪNG MÁY ONLINE (TỐI ĐA 4 MÁY)
         for idx, dev in enumerate(online_devices[:4]):
             row_num = idx + 1
             dev_id = dev.get("deviceId", f"dev_{idx}")
-            is_paused = dev.get("status") == "paused"
-            is_running = dev.get("status") == "running"
+            dev_enabled = dev.get("enabled", True)
 
-            btn_dev_run = discord.ui.Button(
-                label=f"⚡ Chạy [M{idx+1}]",
-                style=discord.ButtonStyle.primary,
-                row=row_num,
-                disabled=(is_running and not is_paused)
-            )
-            btn_dev_toggle = discord.ui.Button(
-                label=f"▶ Tiếp Tục [M{idx+1}]" if is_paused else f"⏸ Tạm Dừng [M{idx+1}]",
-                style=discord.ButtonStyle.success if is_paused else discord.ButtonStyle.secondary,
-                row=row_num
-            )
             btn_dev_stop = discord.ui.Button(label=f"⏹ Dừng [M{idx+1}]", style=discord.ButtonStyle.danger, row=row_num)
+            btn_dev_timer = discord.ui.Button(label=f"🕒 Hẹn Giờ [M{idx+1}]", style=discord.ButtonStyle.secondary, row=row_num)
+            btn_dev_enable = discord.ui.Button(label=f"🟢 Bật Auto [M{idx+1}]", style=discord.ButtonStyle.success, row=row_num)
+            btn_dev_shutdown = discord.ui.Button(label=f"🔌 Shutdown [M{idx+1}]", style=discord.ButtonStyle.danger, row=row_num)
+            btn_dev_showlog = discord.ui.Button(label=f"📄 Show Log [M{idx+1}]", style=discord.ButtonStyle.secondary, row=row_num)
 
-            btn_dev_run.callback = self.make_device_callback(dev_id, "RUN_NOW", f"CHẠY [M{idx+1}]")
-            btn_dev_toggle.callback = self.make_device_callback(dev_id, "RESUME" if is_paused else "PAUSE", f"{'TIẾP TỤC' if is_paused else 'TẠM DỪNG'} [M{idx+1}]")
             btn_dev_stop.callback = self.make_device_callback(dev_id, "STOP", f"DỪNG [M{idx+1}]")
+            btn_dev_timer.callback = self.make_timer_callback(dev_id, f"[M{idx+1}]")
+            btn_dev_enable.callback = self.make_device_callback(dev_id, "ENABLE", f"BẬT AUTO [M{idx+1}]", {"enabled": True})
+            btn_dev_shutdown.callback = self.make_device_callback(dev_id, "SHUTDOWN", f"SHUTDOWN [M{idx+1}]")
+            btn_dev_showlog.callback = self.make_showlog_callback(dev_id, f"[M{idx+1}]")
 
-            self.add_item(btn_dev_run)
-            self.add_item(btn_dev_toggle)
             self.add_item(btn_dev_stop)
+            self.add_item(btn_dev_timer)
+            self.add_item(btn_dev_enable)
+            self.add_item(btn_dev_shutdown)
+            self.add_item(btn_dev_showlog)
+
+
+    def make_timer_callback(self, dev_id, machine_name):
+        async def callback(interaction: discord.Interaction):
+            modal = TimerModal(dev_id, machine_name)
+            await interaction.response.send_modal(modal)
+        return callback
+
+    def make_showlog_callback(self, dev_id, machine_name):
+        async def callback(interaction: discord.Interaction):
+            await interaction.response.defer(ephemeral=True)
+            await asyncio.to_thread(send_command, dev_id, "REQUEST_LOGS")
+            await interaction.followup.send(f"📄 Đã yêu cầu gửi log từ máy `{dev_id}`. Vui lòng đợi vài giây...", ephemeral=True)
+            
+            await asyncio.sleep(2)
+            try:
+                req = urllib.request.Request(f"{FIREBASE_DB_URL}/discordLogs/{dev_id}.json?t={int(time.time()*1000)}")
+                with urllib.request.urlopen(req, timeout=3) as response:
+                    logs = json.loads(response.read().decode()) or []
+                    
+                if not logs:
+                    await interaction.followup.send(f"⚠️ Máy `{dev_id}` chưa có log hoặc extension chưa kịp phản hồi.", ephemeral=True)
+                else:
+                    log_text = chr(10).join(logs)
+                    embed = discord.Embed(title=f"🖥️ LIVE ACTIVITY LOG {machine_name}", description=f"```ini\\n{log_text}\\n```", color=discord.Color.green())
+                    await interaction.followup.send(embed=embed, ephemeral=True)
+            except Exception as e:
+                await interaction.followup.send(f"Lỗi lấy log: {str(e)}", ephemeral=True)
+        return callback
 
     def make_global_callback(self, action, name, extra_data=None):
         async def callback(interaction: discord.Interaction):
@@ -283,7 +362,7 @@ def build_panel(devices_data=None):
     if not online_devices:
         embed.add_field(
             name="📡 Trạng thái máy kết nối",
-            value="⚪ Hiện chưa có máy nào online. Hãy mở Extension trên trình duyệt để tự động kết nối.",
+            value="⚪ Hiện chưa có máy nào online.",
             inline=False
         )
     else:
@@ -299,12 +378,23 @@ def build_panel(devices_data=None):
 
         for idx, dev in enumerate(online_devices):
             status = dev.get("status")
-            status_icon = "🟢 ĐANG CHẠY" if status == "running" else ("🟡 ĐANG TẠM DỪNG" if status == "paused" else ("🔴 TỰ ĐỘNG TẮT" if status == "disabled" else "⚪ SẴN SÀNG"))
+            if status == "running":
+                status_icon = "⚡ Đang chạy"
+            elif status == "paused":
+                status_icon = "⏸ Tạm dừng"
+            else:
+                status_icon = "⚪ Chờ"
+                
+            auto_status = "🟢 BẬT" if dev.get("enabled", True) else "🔴 TẮT"
             ago_sec = max(0, int((now - dev.get("lastActive", 0)) / 1000))
-            from_date = dev.get("fromDate", "2026-08-15")
+            
+            interval = dev.get("intervalMinutes", 60)
+            start_t = dev.get("autoStartTime", "00:00")
+            end_t = dev.get("autoEndTime", "23:59")
+            
             embed.add_field(
                 name=f"🖥️ [Máy {idx + 1}]: {dev.get('deviceName') or dev.get('deviceId')}",
-                value=f"• **Trạng thái:** {status_icon}\n• **Tiến độ:** {dev.get('currentStep', 'Sẵn sàng')}\n• **From Date:** `{from_date}`\n• **Email:** `{dev.get('email', 'N/A')}`\n• **Phản hồi:** {ago_sec}s trước",
+                value=f"• **Trạng thái:** {status_icon}\n• **Auto:** {auto_status}\n• **Tiến độ:** {dev.get('currentStep', 'Sẵn sàng')}\n• **From Date:** `{dev.get('fromDate', '2026-08-15')}`\n• **Email:** `{dev.get('email', 'N/A')}`\n• **Hẹn giờ:** {interval}p | {start_t}-{end_t} | Shutdown: Tắt\n• **Phản hồi:** {ago_sec}s trước",
                 inline=False
             )
 

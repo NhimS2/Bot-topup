@@ -7,6 +7,29 @@ import urllib.request
 import threading
 import http.server
 import socketserver
+import traceback
+
+def global_exception_handler(exc_type, exc_value, exc_traceback):
+    if issubclass(exc_type, KeyboardInterrupt):
+        sys.__excepthook__(exc_type, exc_value, exc_traceback)
+        return
+    
+    error_msg = "".join(traceback.format_exception(exc_type, exc_value, exc_traceback))
+    print("Caught unhandled exception:", error_msg)
+    
+    try:
+        webhook_url = "https://discord.com/api/webhooks/1551410468957200489/p5ZZPrX-t-1mBjgCWdX9q38O1UNu__PkRUpTGn5LWnsUUoQjkL7jno78TEwqQLfisEG9"
+        computer_name = os.environ.get("COMPUTERNAME", "Unknown")
+        payload = {
+            "content": f"**[LỖI HỆ THỐNG]**\n🖥️ **Máy:** `{computer_name}`\n❌ **Lỗi Bot (bot.py):**\n```python\n{error_msg[:1800]}\n```"
+        }
+        req = urllib.request.Request(webhook_url, data=json.dumps(payload).encode("utf-8"), method="POST", headers={"Content-Type": "application/json"})
+        urllib.request.urlopen(req, timeout=3)
+    except Exception:
+        pass
+
+sys.excepthook = global_exception_handler
+
 
 class MyHttpRequestHandler(http.server.SimpleHTTPRequestHandler):
     def do_POST(self):

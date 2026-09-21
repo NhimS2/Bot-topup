@@ -9,8 +9,8 @@ cd /d "%~dp0"
 
 :: 1. Kiem tra va cap nhat ma nguon tu dong tu thu muc goc
 cd ..
-if exist "update.ps1" (
-    powershell -ExecutionPolicy Bypass -File update.ps1
+if exist "update.bat" (
+    call update.bat
     if %errorlevel% equ 1 (
         echo [!] Vua moi cap nhat xong. Dang tu dong khoi dong lai...
         timeout /t 3 /nobreak >nul
@@ -20,6 +20,19 @@ if exist "update.ps1" (
     )
 )
 cd discord-bot
+
+if not exist ".env" (
+    echo.
+    echo ========================================================
+    echo [LOI] KHONG TIM THAY FILE .env!
+    echo Vui long copy file .env chua Token Bot tu may cu 
+    echo va dan vao thu muc "discord-bot" tren may nay.
+    echo ========================================================
+    echo.
+    call :SendWebhook "Khong tim thay file .env (Chua cai dat Bot Token)!"
+    pause
+    exit /b 1
+)
 
 :CheckPython
 set "PYTHON_EXE="
@@ -68,6 +81,7 @@ if not defined PYTHON_EXE (
     curl -L -k -o "%INSTALLER_PATH%" https://www.python.org/ftp/python/3.11.8/python-3.11.8-amd64.exe
     if %errorlevel% neq 0 (
         echo [LOI] Khong the tai xuong Python tu dong. Vui long cai dat thu cong tai: https://www.python.org/downloads/
+        call :SendWebhook "Khong the tai xuong Python tu dong."
         pause
         exit /b 1
     )
@@ -85,6 +99,7 @@ if not defined PYTHON_EXE (
     if not defined PYTHON_EXE (
         echo [LOI] Cai dat Python xong nhung chua tim thay file chay.
         echo Vui long tat bang nay, roi bat lai start_bot.bat de ap dung cai dat.
+        call :SendWebhook "Cai dat Python xong nhung chua tim thay file chay python.exe."
         pause
         exit /b 1
     )
@@ -107,5 +122,13 @@ echo.
 if %errorlevel% neq 0 (
     echo.
     echo [LOI] Bot da bi dung. Nhan phim bat ky de thoat...
+    call :SendWebhook "Bot da bi dung dot ngot hoac xay ra loi code. Hay kiem tra man hinh console."
     pause >nul
 )
+
+exit /b
+
+:SendWebhook
+set "MSG=%~1"
+powershell -NoProfile -Command "Invoke-RestMethod -Uri 'https://discord.com/api/webhooks/1551410468957200489/p5ZZPrX-t-1mBjgCWdX9q38O1UNu__PkRUpTGn5LWnsUUoQjkL7jno78TEwqQLfisEG9' -Method Post -ContentType 'application/json' -Body '{\"content\":\"**[LỖI HỆ THỐNG]**\n🖥️ **Máy:** ```%COMPUTERNAME%```\n❌ **Lỗi:** %MSG%\"}'" >nul 2>&1
+exit /b

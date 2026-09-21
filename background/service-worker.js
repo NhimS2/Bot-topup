@@ -952,7 +952,7 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
         sendResponse({ success: true, enabled });
       }
       else if (request.action === 'UPDATE_CONFIG') {
-          const { intervalMinutes, autoLogin, email, password, autoTodayDate, fromDate, autoStartTime, autoEndTime, blockedPhones, showWidget, selectedProjects, deviceName, enableCloudControl, accessCode } = request;
+          const { intervalMinutes, autoLogin, email, password, autoTodayDate, fromDate, autoStartTime, autoEndTime, autoShutdown, blockedPhones, showWidget, selectedProjects, deviceName, enableCloudControl, accessCode } = request;
           const { enabled } = await chrome.storage.local.get('enabled');
           const updates = {
             intervalMinutes,
@@ -963,6 +963,7 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
             fromDate,
             autoStartTime,
             autoEndTime,
+            autoShutdown,
             blockedPhones,
             showWidget,
             selectedProjects,
